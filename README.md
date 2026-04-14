@@ -222,6 +222,19 @@ Container-to-VM communication uses the Vagrant data VM IP:
 - `RABBITMQ_HOST=192.168.56.14`
 - `REDIS_HOST=192.168.56.14`
 
+Useful Docker commands:
+
+```bash
+docker compose up --build
+docker compose down
+docker compose ps
+docker compose logs ui
+docker compose logs proxy
+docker compose logs history
+docker images
+docker ps -s
+```
+
 To re-run only one machine:
 
 ```bash
