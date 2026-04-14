@@ -195,10 +195,12 @@ Current mixed setup:
 
 - `ui`, `proxy`, `history` run in Docker Compose
 - PostgreSQL, RabbitMQ, and Redis stay on `devops-data`
+- only the `devops-data` VM needs to be running for this mode
 
 Setup:
 
 ```bash
+vagrant up devops-data
 cp .env.example .env
 docker compose up --build
 ```
