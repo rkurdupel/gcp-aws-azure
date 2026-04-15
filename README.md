@@ -17,7 +17,7 @@ flowchart LR
     User[User]
     UI[Web UI<br/>Current View + History View]
     Proxy[API Proxy Service]
-    Coinbase[Coinbase Spot Price API]
+    Coinbase[Public API<br/>Coinbase]
     Rabbit[RabbitMQ]
     History[History Service<br/>Consumer + History API]
     Postgres[(PostgreSQL)]
@@ -28,11 +28,11 @@ flowchart LR
     Proxy -- fetch external data --> Coinbase
     Coinbase -- response --> Proxy
     Proxy -- current response --> UI
-    Proxy -- publish normalized event --> Rabbit
-    Rabbit -- deliver event --> History
-    History -- store record --> Postgres
-    UI -- request history --> History
-    History -- return historical data --> UI
+    Proxy -- publish price message --> Rabbit
+    Rabbit -- send message --> History
+    History -- save data --> Postgres
+    UI -- request saved data --> History
+    History -- return saved data --> UI
     UI <--> Redis
 ```
 
