@@ -14,24 +14,26 @@ The supported deployment model is:
 
 ```mermaid
 flowchart LR
-    User[User Browser]
-    UI[UI Service<br/>Flask :5000]
-    Proxy[Proxy Service<br/>Flask :5001]
-    History[History Service<br/>Go :5002]
-    Redis[(Redis<br/>devops-data :6379)]
-    Rabbit[(RabbitMQ<br/>devops-data :5672)]
-    Postgres[(PostgreSQL<br/>devops-data :5432)]
-    Coinbase[Coinbase API]
+    User[User]
+    UI[Web UI<br/>Current View + History View]
+    Proxy[API Proxy Service]
+    Coinbase[Coinbase Spot Price API]
+    Rabbit[RabbitMQ]
+    History[History Service<br/>Consumer + History API]
+    Postgres[(PostgreSQL)]
+    Redis[(Redis)]
 
     User --> UI
-    UI --> Proxy
-    UI --> History
+    UI -- request current data --> Proxy
+    Proxy -- fetch external data --> Coinbase
+    Coinbase -- response --> Proxy
+    Proxy -- current response --> UI
+    Proxy -- publish normalized event --> Rabbit
+    Rabbit -- deliver event --> History
+    History -- store record --> Postgres
+    UI -- request history --> History
+    History -- return historical data --> UI
     UI <--> Redis
-    Proxy --> Coinbase
-    Proxy --> Rabbit
-    Proxy --> History
-    History --> Rabbit
-    History --> Postgres
 ```
 
 Request flow:
