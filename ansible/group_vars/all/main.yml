@@ -1,12 +1,11 @@
-# postgres_host: 192.168.56.14
-# rabbitmq_host: 192.168.56.14
-# redis_host: 192.168.56.14
-# proxy_host: 192.168.56.12
-# history_host: 192.168.56.13
+postgres_host: 192.168.56.14
+rabbitmq_host: 192.168.56.14
+redis_host: 192.168.56.14
+proxy_host: 192.168.56.12
 
-# postgres_db: currency_rates_tracker
-# postgres_table: currency_rates
-# postgres_user: currency_app_user
-# rabbitmq_user: currency_app_user
-# rabbitmq_queue: currency_rates
-# redis_port: 6379
+postgres_db: currency_rates_tracker
+postgres_table: currency_rates
+postgres_user: currency_app_user
+rabbitmq_user: currency_app_user
+rabbitmq_queue: currency_rates
+redis_port: 6379

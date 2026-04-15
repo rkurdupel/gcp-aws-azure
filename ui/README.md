@@ -1,32 +1,33 @@
 # UI Service
 
-Flask web application that renders the main price dashboard and history page.
-
 ## Responsibility
 
-- shows the current selected coin price
-- renders historical records table
-- requests chart data from the history service
-- stores user session state in Redis
+The UI service is a Flask web application that:
+
+- renders the main dashboard
+- renders the history page
+- requests live prices from the proxy service
+- requests chart and table data from the history service
+- stores session data in Redis
 
 ## Runtime
 
 - language: Python 3
 - framework: Flask
-- service port: `5000`
-- host VM: `devops-ui`
+- container port: `5000`
+- Docker host access: `http://localhost:5000`
 
 ## Endpoints
 
 - `GET /` - main dashboard
-- `GET /history` - historical price table with filters
+- `GET /history` - historical records page with filters
 - `GET /api/chart-data` - chart data for frontend updates
 
 ## Dependencies
 
-- Redis for Flask session storage
-- Proxy service for live prices
-- History service for historical records and chart data
+- Redis on `devops-data`
+- proxy service inside Docker Compose
+- history service inside Docker Compose
 
 ## Environment Variables
 
@@ -37,58 +38,78 @@ Flask web application that renders the main price dashboard and history page.
 - `HISTORY_HOST`
 - `SECRET_KEY`
 
-These variables are rendered by Ansible into `ui.service`.
+Current runtime expectations:
 
-## Systemd
-
-Unit template:
-
-- `ansible/roles/ui/templates/ui.service.j2`
+- `PROXY_HOST=proxy`
+- `HISTORY_HOST=history`
+- `REDIS_HOST=192.168.56.14`
 
 ## Docker
 
-- Dockerfile: `ui/Dockerfile`
-- exposed application port: `5000`
-- Docker Compose host access: `http://localhost:5000`
-
-Useful commands on `devops-ui`:
+Start the full application stack:
 
 ```bash
-sudo systemctl status ui
-sudo journalctl -u ui.service -n 50
-sudo systemctl cat ui.service
-sudo systemctl show ui.service -p Environment
+docker compose up --build
+```
+
+Show UI logs:
+
+```bash
+docker compose logs ui
+```
+
+Stop the stack:
+
+```bash
+docker compose down
 ```
 
 ## Common Problems
 
-### `REDIS_PORT` is `None`
+### HTTP 500 On `/`
 
-Cause:
-
-- the rendered `ui.service` does not contain `Environment=REDIS_PORT=6379`
-
-Check:
-
-```bash
-sudo systemctl cat ui.service
-```
-
-### HTTP 500 on `/`
-
-Cause:
+Likely causes:
 
 - Redis is unavailable
-- history service is unavailable
-- proxy service is unavailable
+- proxy is unavailable
+- history is unavailable
+- `SECRET_KEY` or Redis settings are wrong in `.env`
 
 Check:
 
 ```bash
-sudo journalctl -u ui.service -n 50
+docker compose logs ui
+```
+
+### No Live Price
+
+Likely causes:
+
+- proxy container is down
+- `PROXY_HOST` is wrong
+
+Check:
+
+```bash
+docker compose logs proxy
+```
+
+### No Chart Or History Data
+
+Likely causes:
+
+- history container is down
+- `HISTORY_HOST` is wrong
+- history cannot reach PostgreSQL or RabbitMQ on `devops-data`
+
+Check:
+
+```bash
+docker compose logs history
 ```
 
 ## Notes
 
-- this service uses Flask's built-in server, which is fine for this lab but not for production
-- `SECRET_KEY` can be a simple stable value in development, for example `dev-secret`
+- the Flask app reads `SECRET_KEY` from the environment
+- the UI expects Docker DNS to resolve `proxy` and `history`
+- this service uses Flask’s built-in server, which is acceptable for this lab setup

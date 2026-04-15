@@ -1,30 +1,30 @@
 # History Service
 
-Go service that consumes price messages from RabbitMQ, stores them in PostgreSQL, and exposes history/statistics endpoints.
-
 ## Responsibility
 
-- consumes messages from RabbitMQ
+The history service is a Go application that:
+
+- consumes price messages from RabbitMQ
 - inserts prices into PostgreSQL
-- serves historical data for the UI
+- serves historical rows for the UI
 - serves chart data and min/max statistics
 
 ## Runtime
 
 - language: Go
-- service port: `5002`
-- host VM: `devops-history`
+- container port: `5002`
+- Docker host access: `http://localhost:5002`
 
 ## Endpoints
 
-- `GET /history` - returns filtered price history
-- `GET /stats` - returns highest and lowest price for a coin
-- `GET /chart` - returns chart points for a selected time range
+- `GET /history` - filtered historical rows
+- `GET /stats` - highest and lowest price for a coin
+- `GET /chart` - chart points for a selected range
 
 ## Dependencies
 
-- PostgreSQL
-- RabbitMQ
+- PostgreSQL on `devops-data`
+- RabbitMQ on `devops-data`
 
 ## Environment Variables
 
@@ -38,73 +38,77 @@ Go service that consumes price messages from RabbitMQ, stores them in PostgreSQL
 - `RABBITMQ_PASS`
 - `RABBITMQ_QUEUE`
 
-These variables are rendered by Ansible into `history.service`.
+Current runtime expectations:
 
-## Build and Service
-
-The binary is built by Ansible with:
-
-```bash
-go build -o history-service main.go
-```
-
-Systemd unit template:
-
-- `ansible/roles/history/templates/history.service.j2`
+- `POSTGRES_HOST=192.168.56.14`
+- `RABBITMQ_HOST=192.168.56.14`
 
 ## Docker
 
-- Dockerfile: `history_service/Dockerfile`
-- exposed application port: `5002`
-- Docker Compose host access: `http://localhost:5002`
-
-Useful commands on `devops-history`:
+Start the full stack:
 
 ```bash
-sudo systemctl status history
-sudo journalctl -u history.service -n 50
-sudo systemctl cat history.service
-sudo systemctl show history.service -p Environment
+docker compose up --build
+```
+
+Show history logs:
+
+```bash
+docker compose logs history
+```
+
+Stop the stack:
+
+```bash
+docker compose down
 ```
 
 ## Common Problems
 
-### `Failed to create table: pq: syntax error at or near "("`
+### PostgreSQL Write Errors
 
-Cause:
+Likely causes:
 
-- `POSTGRES_TABLE` is empty when the service starts
+- PostgreSQL is not running on `devops-data`
+- DB credentials in `.env` are wrong
+- `POSTGRES_TABLE` is empty or incorrect
 
 Check:
 
 ```bash
-sudo systemctl show history.service -p Environment
+docker compose logs history
+vagrant ssh devops-data -c "sudo systemctl status postgresql"
 ```
 
-Expected:
+### RabbitMQ Reconnect Loop
 
-```text
-POSTGRES_TABLE=currency_rates
-```
-
-### RabbitMQ reconnect loop
-
-Cause:
+Likely causes:
 
 - RabbitMQ is down
-- wrong user or password
-- queue name is missing
+- wrong RabbitMQ user or password
+- queue name mismatch
 
 Check:
 
 ```bash
-sudo journalctl -u history.service -n 50
+docker compose logs history
+vagrant ssh devops-data -c "sudo systemctl status rabbitmq-server"
+```
+
+### SQL Error Near `(`
+
+One common cause is an empty `POSTGRES_TABLE` value when the service starts.
+
+Check:
+
+```bash
+grep POSTGRES_TABLE .env
 ```
 
 ## Notes
 
-- the service creates the target table if it does not exist
+- the service creates the target table if it does not already exist
 - duplicate inserts within a short time window are skipped
 - malformed RabbitMQ messages are NACKed without requeue
-- DB save failures are NACKed with requeue
+- database save failures are NACKed with requeue
 - messages are ACKed only after successful processing

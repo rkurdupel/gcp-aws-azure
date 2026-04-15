@@ -12,17 +12,3 @@
     - rabbitmq
     - redis
 
-- hosts: history
-  become: true
-  roles:
-    - history
-
-- hosts: proxy
-  become: true
-  roles:
-    - proxy
-
-- hosts: ui
-  become: true
-  roles:
-    - ui

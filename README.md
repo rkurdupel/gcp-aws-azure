@@ -1,34 +1,26 @@
 # Currency Rates Tracker
 
-Multi-service pet project for collecting, storing and displaying cryptocurrency prices in a small Vagrant-based environment, with an optional Docker Compose app layer.
+## Overview
 
-## Table of Contents
+Currency Rates Tracker is a small multi-service lab project for collecting, storing, and displaying cryptocurrency prices.
 
-- [Architecture Diagram](#architecture-diagram)
-- [Architecture](#architecture)
-- [VM Layout](#vm-layout)
-- [Repository Structure](#repository-structure)
-- [Configuration](#configuration)
-- [Deployment](#deployment)
-- [Services and Ports](#services-and-ports)
-- [Systemd Units](#systemd-units)
-- [Data Flow Details](#data-flow-details)
-- [Troubleshooting](#troubleshooting)
-- [Useful Commands](#useful-commands)
-- [Persistence](#persistence)
-- [Future Improvements](#future-improvements)
+The supported deployment model is:
 
-## Architecture Diagram
+- one Vagrant VM named `devops-data`
+- Ansible provisioning for PostgreSQL, RabbitMQ, and Redis on that VM
+- Docker Compose for the application layer: `ui`, `proxy`, and `history`
+
+## Architecture
 
 ```mermaid
 flowchart LR
     User[User Browser]
-    UI[UI Service<br/>Flask :5000<br/>devops-ui]
-    Proxy[Proxy Service<br/>Flask :5001<br/>devops-proxy]
-    History[History Service<br/>Go :5002<br/>devops-history]
-    Redis[(Redis<br/>:6379)]
-    Rabbit[(RabbitMQ<br/>:5672)]
-    Postgres[(PostgreSQL<br/>:5432)]
+    UI[UI Service<br/>Flask :5000]
+    Proxy[Proxy Service<br/>Flask :5001]
+    History[History Service<br/>Go :5002]
+    Redis[(Redis<br/>devops-data :6379)]
+    Rabbit[(RabbitMQ<br/>devops-data :5672)]
+    Postgres[(PostgreSQL<br/>devops-data :5432)]
     Coinbase[Coinbase API]
 
     User --> UI
@@ -42,54 +34,15 @@ flowchart LR
     History --> Postgres
 ```
 
-GitHub renders Mermaid diagrams directly, so this section can be used as a navigable architecture view inside the repository page.
-
-The project provisions 4 virtual machines with Vagrant and configures them with Ansible:
-
-- `devops-ui` hosts the Flask web UI
-- `devops-proxy` fetches current coin prices from Coinbase and sends them to RabbitMQ
-- `devops-history` consumes RabbitMQ messages and stores them in PostgreSQL
-- `devops-data` runs PostgreSQL, RabbitMQ and Redis
-
-## Architecture
-
 Request flow:
 
-1. User opens the UI on `devops-ui`
-2. UI requests a live price from `proxy`
-3. `proxy` fetches the spot price from Coinbase
-4. `proxy` publishes price messages to RabbitMQ
-5. `history` consumes messages from RabbitMQ and stores them in PostgreSQL
-6. UI requests historical data and chart data from `history`
-7. Flask session state is stored in Redis
-
-Main technologies:
-
-- Vagrant
-- Ansible
-- Docker Compose
-- Python / Flask
-- Go
-- PostgreSQL
-- RabbitMQ
-- Redis
-- systemd
-
-## VM Layout
-
-| VM | Role | IP | Main services |
-| --- | --- | --- | --- |
-| `devops-ui` | frontend | `192.168.56.11` | Flask UI |
-| `devops-proxy` | API proxy | `192.168.56.12` | Flask proxy |
-| `devops-history` | history backend | `192.168.56.13` | Go service |
-| `devops-data` | data layer | `192.168.56.14` | PostgreSQL, RabbitMQ, Redis |
-
-SSH forwarded ports:
-
-- `2222` -> `devops-ui`
-- `2223` -> `devops-proxy`
-- `2224` -> `devops-history`
-- `2225` -> `devops-data`
+1. The browser opens the UI on `http://localhost:5000`
+2. The UI requests a live price from the proxy service
+3. The proxy fetches the spot price from Coinbase
+4. The proxy publishes price messages to RabbitMQ on `devops-data`
+5. The history service consumes RabbitMQ messages and writes them to PostgreSQL on `devops-data`
+6. The UI requests historical rows and chart points from the history service
+7. The UI stores session state in Redis on `devops-data`
 
 ## Repository Structure
 
@@ -102,432 +55,293 @@ SSH forwarded ports:
 ├── .env.example
 ├── ansible/
 │   ├── inventory.ini
-│   ├── host_vars/
-│   ├── site.yml
 │   ├── group_vars/
-│   │   └── all/
-│   │       ├── main.yml
-│   │       └── vault.yml
-│   └── roles/
+│   ├── host_vars/
+│   ├── roles/
+│   ├── known_hosts
+│   └── site.yml
+├── ui/
 ├── proxy_service/
-├── history_service/
-└── ui/
+└── history_service/
 ```
+
+Directory responsibilities:
+
+- `Vagrantfile` defines the `devops-data` VM
+- `deploy.sh` starts the VM, refreshes `known_hosts`, and runs Ansible
+- `docker-compose.yml` starts the application containers
+- `ansible/` provisions PostgreSQL, RabbitMQ, and Redis on `devops-data`
+- `ui/` contains the Flask frontend
+- `proxy_service/` contains the Flask live-price proxy
+- `history_service/` contains the Go history worker/API
+
+## Prerequisites
+
+Install these tools on the host machine:
+
+- Vagrant
+- VirtualBox
+- Docker Engine with Docker Compose
+- Ansible
+
+You also need:
+
+- network access from the host and containers to the data VM
+- a valid Ansible vault password for `ansible/group_vars/all/vault.yml`
 
 ## Configuration
 
-Non-secret variables should live in `ansible/group_vars/all/main.yml`.
+### Docker Environment
 
-Example:
+Create the runtime environment file:
 
-```yaml
-postgres_host: 192.168.56.14
-rabbitmq_host: 192.168.56.14
-redis_host: 192.168.56.14
-proxy_host: 192.168.56.12
-history_host: 192.168.56.13
-
-postgres_db: currency_rates_tracker
-postgres_table: currency_rates
-postgres_user: currency_app_user
-rabbitmq_user: currency_app_user
-rabbitmq_queue: currency_rates
-redis_port: 6379
+```bash
+cp .env.example .env
 ```
 
-Secret variables should live in `ansible/group_vars/all/vault.yml` and be encrypted with `ansible-vault`.
+Current `.env.example` values:
 
-Recommended keys:
-
-```yaml
-postgres_password: "devpass123"
-pgadmin_login: "postgres"
-pgadmin_login_password: "coinops"
-rabbitmq_password: "devpass123"
-redis_password: "devpass123"
-ui_secret_key: "dev-secret"
+```dotenv
+REDIS_HOST=192.168.56.14
+REDIS_PORT=6379
+REDIS_PASSWORD=coinops
+PROXY_HOST=proxy
+HISTORY_HOST=history
+RABBITMQ_HOST=192.168.56.14
+RABBITMQ_USER=currency_app_user
+RABBITMQ_PASS=coinops
+RABBITMQ_QUEUE=currency_rates
+POSTGRES_HOST=192.168.56.14
+POSTGRES_DB=currency_rates_tracker
+POSTGRES_USER=currency_app_user
+POSTGRES_PASS=password
+POSTGRES_TABLE=currency_rates
+SECRET_KEY=coinops
 ```
 
-Notes:
+How those values are used:
 
-- `ui_secret_key` can be any stable string in development
-- `postgres_password` and `rabbitmq_password` can also be chosen by you, but must match the credentials created by Ansible and used by the services
-- `pgadmin_login` and `pgadmin_login_password` are used by the PostgreSQL Ansible modules for administrative tasks
-- `redis_password` must match the Redis password expected by the UI service
-- `group_vars/all/vault.yml` is the correct location if you want Ansible to load the secrets automatically for all hosts
+- `PROXY_HOST=proxy` and `HISTORY_HOST=history` are Docker service names used for container-to-container communication
+- `REDIS_HOST`, `RABBITMQ_HOST`, and `POSTGRES_HOST` point at the `devops-data` VM
+- `SECRET_KEY` is used by the UI Flask app
 
-SSH private key paths for Vagrant machines are kept in `ansible/host_vars/` with repo-relative paths.
+### Ansible Variables
+
+Non-secret shared values live in:
+
+```text
+ansible/group_vars/all/main.yml
+```
+
+Secrets live in:
+
+```text
+ansible/group_vars/all/vault.yml
+```
+
+The data-layer deployment depends on these values:
+
+- PostgreSQL host, database, table, and application user
+- RabbitMQ host, application user, and queue
+- Redis host and port
+- passwords for PostgreSQL, RabbitMQ, and Redis
 
 ## Deployment
 
-Bring up the environment and run Ansible:
+There are two supported ways to start the environment.
+
+### Option 1: Use `deploy.sh` and then start Docker
 
 ```bash
 ./deploy.sh
-```
-
-Current `deploy.sh`:
-
-```bash
-#!/bin/bash
-vagrant up
-ansible-playbook ansible/site.yml --ask-vault-pass
-```
-
-You can also run the steps manually:
-
-```bash
-vagrant up
-ansible-playbook ansible/site.yml --ask-vault-pass
-```
-
-If you already have a vault password file:
-
-```bash
-ansible-playbook ansible/site.yml --vault-password-file .vault_pass
-```
-
-### Docker Compose
-
-The application layer can also run in Docker while the data layer stays on the Vagrant data VM.
-
-Current mixed setup:
-
-- `ui`, `proxy`, `history` run in Docker Compose
-- PostgreSQL, RabbitMQ, and Redis stay on `devops-data`
-- only the `devops-data` VM needs to be running for this mode
-
-Setup:
-
-```bash
-vagrant up devops-data
 cp .env.example .env
 docker compose up --build
 ```
 
-In this mode:
+What `deploy.sh` does:
 
-- UI is available on `http://localhost:5000`
-- Proxy is available on `http://localhost:5001`
-- History is available on `http://localhost:5002`
+1. starts the `devops-data` VM
+2. refreshes `ansible/known_hosts` with the VM SSH host key
+3. runs `ansible-playbook ansible/site.yml --ask-vault-pass`
 
-Container-to-container communication uses Docker service names:
+### Option 2: Run the steps manually
 
-- `PROXY_HOST=proxy`
-- `HISTORY_HOST=history`
+```bash
+vagrant up devops-data
+: > ansible/known_hosts
+ssh-keyscan -H 192.168.56.14 >> ansible/known_hosts
+ansible-playbook ansible/site.yml --ask-vault-pass
+cp .env.example .env
+docker compose up --build
+```
 
-Container-to-VM communication uses the Vagrant data VM IP:
+If you want containers in the background:
 
-- `POSTGRES_HOST=192.168.56.14`
-- `RABBITMQ_HOST=192.168.56.14`
-- `REDIS_HOST=192.168.56.14`
+```bash
+docker compose up --build -d
+```
 
-Useful Docker commands:
+## Services And Ports
+
+### UI
+
+- container port: `5000`
+- host access: `http://localhost:5000`
+- responsibility: render the dashboard, history page, and chart data for the browser
+
+### Proxy
+
+- container port: `5001`
+- host access: `http://localhost:5001`
+- responsibility: fetch live prices from Coinbase and publish them to RabbitMQ
+
+### History
+
+- container port: `5002`
+- host access: `http://localhost:5002`
+- responsibility: consume queued price updates, store them in PostgreSQL, and serve history/chart endpoints
+
+### Data VM
+
+- VM name: `devops-data`
+- private IP: `192.168.56.14`
+- services:
+  - PostgreSQL on `5432`
+  - RabbitMQ on `5672`
+  - Redis on `6379`
+
+## Data Flow
+
+### Live Price Request
+
+1. The browser loads the UI
+2. The UI calls `http://proxy:5001/price/<coin>` from inside Docker
+3. The proxy fetches the latest Coinbase spot price
+4. The proxy sends the price message to RabbitMQ on `devops-data`
+5. The UI displays the current price response immediately
+
+### Historical Data Recording
+
+1. The history service consumes RabbitMQ messages
+2. The history service validates and deduplicates records within a short window
+3. The history service inserts rows into PostgreSQL
+
+### Chart And Table Reads
+
+1. The UI calls the history service on `http://history:5002`
+2. The history service reads from PostgreSQL
+3. The history service returns JSON for tables, stats, and charts
+
+## Useful Commands
+
+### Vagrant
+
+```bash
+vagrant up devops-data
+vagrant halt devops-data
+vagrant reload devops-data
+vagrant ssh devops-data
+```
+
+### Ansible
+
+```bash
+ansible-playbook ansible/site.yml --ask-vault-pass
+ansible-playbook ansible/site.yml --limit data --ask-vault-pass
+```
+
+### Docker Compose
 
 ```bash
 docker compose up --build
+docker compose up --build -d
 docker compose down
 docker compose ps
 docker compose logs ui
 docker compose logs proxy
 docker compose logs history
-docker images
-docker ps -s
 ```
 
-To re-run only one machine:
+### Database Check
 
 ```bash
-ansible-playbook ansible/site.yml --limit ui --ask-vault-pass
-ansible-playbook ansible/site.yml --limit proxy --ask-vault-pass
-ansible-playbook ansible/site.yml --limit history --ask-vault-pass
-ansible-playbook ansible/site.yml --limit data --ask-vault-pass
+PGPASSWORD=postgres psql -h localhost -U postgres -d currency_rates_tracker -c "SELECT coin, recorded_at, price FROM currency_rates ORDER BY recorded_at DESC LIMIT 20;"
 ```
-
-## Services and Ports
-
-### UI
-
-- Host: `devops-ui`
-- Port: `5000`
-- Stack: Flask + Redis-backed sessions
-- Main routes:
-  - `/`
-  - `/history`
-  - `/api/chart-data`
-
-Environment variables passed through systemd:
-
-- `REDIS_HOST`
-- `REDIS_PORT`
-- `REDIS_PASSWORD`
-- `PROXY_HOST`
-- `HISTORY_HOST`
-- `SECRET_KEY`
-
-Docker:
-
-- image build context: `ui/`
-- published port: `5000:5000`
-
-### Proxy Service
-
-- Host: `devops-proxy`
-- Port: `5001`
-- Stack: Flask + Coinbase API + RabbitMQ
-- Main route:
-  - `/price/<coin>`
-
-Supported coins:
-
-- `BTC`
-- `ETH`
-- `SOL`
-- `BNB`
-
-Environment variables:
-
-- `RABBITMQ_HOST`
-- `RABBITMQ_USER`
-- `RABBITMQ_PASS`
-- `RABBITMQ_QUEUE`
-- `HISTORY_HOST`
-
-Docker:
-
-- image build context: `proxy_service/`
-- published port: `5001:5001`
-
-### History Service
-
-- Host: `devops-history`
-- Port: `5002`
-- Stack: Go + PostgreSQL + RabbitMQ consumer
-- Main routes:
-  - `/history`
-  - `/stats`
-  - `/chart`
-
-Environment variables:
-
-- `POSTGRES_HOST`
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PASS`
-- `POSTGRES_TABLE`
-- `RABBITMQ_HOST`
-- `RABBITMQ_USER`
-- `RABBITMQ_PASS`
-- `RABBITMQ_QUEUE`
-
-Docker:
-
-- image build context: `history_service/`
-- published port: `5002:5002`
-
-### Data Services
-
-- Host: `devops-data`
-- PostgreSQL: `5432`
-- RabbitMQ: `5672`
-- RabbitMQ management: `15672`
-- Redis: `6379`
-
-## Systemd Units
-
-The application services are deployed as systemd units:
-
-- `ui.service`
-- `proxy.service`
-- `history.service`
-
-Useful commands:
-
-```bash
-sudo systemctl status ui
-sudo systemctl status proxy
-sudo systemctl status history
-
-sudo journalctl -u ui.service -n 50
-sudo journalctl -u proxy.service -n 50
-sudo journalctl -u history.service -n 50
-
-sudo systemctl cat ui.service
-sudo systemctl cat proxy.service
-sudo systemctl cat history.service
-
-sudo systemctl show ui.service -p Environment
-sudo systemctl show proxy.service -p Environment
-sudo systemctl show history.service -p Environment
-```
-
-## Data Flow Details
-
-### Live price flow
-
-1. UI calls `http://<proxy_host>:5001/price/<coin>`
-2. Proxy fetches price from Coinbase
-3. Proxy publishes the fetched price to RabbitMQ
-4. Proxy sends the result to RabbitMQ
-5. History service consumes the message and inserts it into PostgreSQL
-
-### History flow
-
-1. UI calls `http://<history_host>:5002/history`
-2. History service reads filtered rows from PostgreSQL
-3. UI renders the table
-
-### Chart flow
-
-1. UI calls `http://<history_host>:5002/chart`
-2. History service loads price points from PostgreSQL
-3. History service downsamples points depending on selected range
-4. UI renders the chart
 
 ## Troubleshooting
 
-### Vault variable is undefined
-
-Symptom:
-
-```text
-'postgres_password' is undefined
-```
+### Containers cannot reach PostgreSQL, RabbitMQ, or Redis
 
 Check:
 
-- `vault.yml` is in `ansible/group_vars/all/vault.yml`
-- the playbook is launched with `--ask-vault-pass` or `--vault-password-file`
-- `vault.yml` actually contains the expected key
+- `devops-data` is running
+- `ansible-playbook` completed successfully
+- `.env` still points to `192.168.56.14`
 
-Useful command:
+Useful checks:
 
 ```bash
-ansible-vault view ansible/group_vars/all/vault.yml
+vagrant ssh devops-data -c "systemctl status postgresql"
+vagrant ssh devops-data -c "systemctl status rabbitmq-server"
+vagrant ssh devops-data -c "systemctl status redis-server"
 ```
 
-### Vault decryption failed
+### UI returns HTTP 500
 
-Symptom:
+Likely causes:
 
-```text
-Decryption failed (no vault secrets were found that could decrypt)
-```
-
-Meaning:
-
-- wrong vault password
-- wrong vault file
-- file was encrypted with a different secret
-
-### UI crashes with `REDIS_PORT` is `None`
-
-Cause:
-
-- rendered `ui.service` does not contain `Environment=REDIS_PORT=6379`
+- Redis is unavailable
+- proxy is unavailable
+- history is unavailable
+- `SECRET_KEY` or Redis settings in `.env` are wrong
 
 Check:
 
 ```bash
-sudo systemctl cat ui.service
-sudo systemctl show ui.service -p Environment
+docker compose logs ui
 ```
 
-### UI returns HTTP 500 because of Redis
+### Proxy cannot publish messages
 
-Check Redis on `devops-data`:
+Likely causes:
 
-```bash
-sudo systemctl status redis-server
-ss -ltnp | grep 6379
-grep '^bind' /etc/redis/redis.conf
-grep '^protected-mode' /etc/redis/redis.conf
-```
-
-Expected Redis config for this lab:
-
-```conf
-bind 127.0.0.1 192.168.56.14
-protected-mode no
-```
-
-### Proxy logs `RabbitMQ error: 'NoneType' object has no attribute 'encode'`
-
-Cause:
-
-- `RABBITMQ_PASS` or another RabbitMQ environment variable is missing in `proxy.service`
+- RabbitMQ is not running
+- `RABBITMQ_PASS` is wrong
+- queue settings in `.env` do not match the provisioned RabbitMQ user
 
 Check:
 
 ```bash
-sudo systemctl cat proxy.service
-sudo systemctl show proxy.service -p Environment
+docker compose logs proxy
+vagrant ssh devops-data -c "sudo rabbitmqctl list_users"
 ```
 
-### History service fails with SQL syntax error near `(`
+### History service cannot write to PostgreSQL
 
-Cause:
+Likely causes:
 
-- `POSTGRES_TABLE` is empty when the service starts
+- PostgreSQL is down
+- DB credentials in `.env` do not match the provisioned DB user
+- `POSTGRES_TABLE` is empty or incorrect
 
 Check:
 
 ```bash
-sudo systemctl cat history.service
-sudo systemctl show history.service -p Environment
+docker compose logs history
+vagrant ssh devops-data -c "sudo systemctl status postgresql"
 ```
 
-The history service must receive:
+### Time looks wrong inside the VM
 
-```ini
-Environment=POSTGRES_TABLE=currency_rates
-```
-
-## Useful Commands
-
-SSH into VMs:
+Check the VM clock:
 
 ```bash
-vagrant ssh devops-ui
-vagrant ssh devops-proxy
-vagrant ssh devops-history
-vagrant ssh devops-data
+vagrant ssh devops-data -c "date"
+vagrant ssh devops-data -c "timedatectl"
 ```
 
-Re-run only one service role:
+If the VM time drifts, reload the VM and verify time sync again:
 
 ```bash
-ansible-playbook ansible/site.yml --limit ui --ask-vault-pass
-ansible-playbook ansible/site.yml --limit proxy --ask-vault-pass
-ansible-playbook ansible/site.yml --limit history --ask-vault-pass
-ansible-playbook ansible/site.yml --limit data --ask-vault-pass
+vagrant reload devops-data
 ```
-
-Check data in PostgreSQL:
-
-```bash
-sudo -u postgres psql -d currency_rates_tracker
-SELECT coin, price, recorded_at FROM currency_rates ORDER BY recorded_at DESC LIMIT 20;
-```
-
-Check RabbitMQ:
-
-```bash
-sudo rabbitmqctl list_queues
-sudo rabbitmqctl list_users
-```
-
-## Persistence
-
-Data persists as long as you keep the same VM disks.
-
-If you run the project on another laptop, the data will not automatically appear there. To move the collected history between machines, export and restore the PostgreSQL database or move the VM disks.
-
-## Future Improvements
-
-- add a proper reverse proxy entry point
-- add health checks for all services
-- add tests for Python and Go services
-- add a dedicated README for each service
-- store deployment logs and metrics
-- use production WSGI/HTTP servers instead of dev servers

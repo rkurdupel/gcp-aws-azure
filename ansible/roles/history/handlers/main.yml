@@ -1,5 +1,0 @@
-- name: reload systemd
-  become: true
-  # daemon_reload - update configuration of the service in systemd without restarting
-  ansible.builtin.systemd:
-    daemon_reload: true

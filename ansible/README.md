@@ -1,149 +1,172 @@
 # Ansible Deployment
 
-This directory contains the provisioning and deployment logic for the project.
-
 ## Responsibility
 
-- configures all Vagrant VMs
-- installs packages
-- renders systemd unit files
-- creates PostgreSQL and RabbitMQ application users
-- configures Redis networking
-- starts all services
+Ansible provisions only the `devops-data` VM.
+
+It is responsible for:
+
+- installing common packages
+- configuring timezone and time sync
+- installing and configuring PostgreSQL
+- installing and configuring RabbitMQ
+- installing and configuring Redis
+
+It does not deploy the application services. The `ui`, `proxy`, and `history` services run through Docker Compose.
 
 ## Entry Points
 
 - inventory: `inventory.ini`
 - playbook: `site.yml`
-- config: `../ansible.cfg`
+- host vars: `host_vars/devops-data.yml`
+- shared vars: `group_vars/all/main.yml`
+- shared secrets: `group_vars/all/vault.yml`
 
-## Inventory Groups
+## Inventory
 
-- `ui`
-- `proxy`
-- `history`
-- `data`
+Current inventory:
 
-Group `all` is also available implicitly and is used for shared variables.
+```ini
+[data]
+devops-data ansible_host=192.168.56.14
+
+[all:vars]
+ansible_user=vagrant
+```
+
+Current host-specific SSH key path:
+
+```yaml
+ansible_ssh_private_key_file: "{{ playbook_dir }}/../.vagrant/machines/devops-data/virtualbox/private_key"
+```
 
 ## Variable Layout
 
-Recommended structure:
+### Non-secret Variables
 
-```text
-ansible/group_vars/all/main.yml
-ansible/group_vars/all/vault.yml
-```
+`group_vars/all/main.yml` contains shared non-secret values used by the data-layer roles, including:
 
-`main.yml`:
+- `postgres_host`
+- `rabbitmq_host`
+- `redis_host`
+- `postgres_db`
+- `postgres_table`
+- `postgres_user`
+- `rabbitmq_user`
+- `rabbitmq_queue`
+- `redis_port`
 
-- non-secret shared variables
-- IP addresses
-- ports
-- usernames
-- queue name
-- database/table names
+### Secret Variables
 
-`vault.yml`:
+`group_vars/all/vault.yml` should contain the encrypted secrets required by the data-layer roles, such as:
 
 - `postgres_password`
+- `pgadmin_login`
+- `pgadmin_login_password`
 - `rabbitmq_password`
-- `ui_secret_key`
+- `redis_password`
 
-## Why `main.yml` Works
+## Provisioning Flow
 
-Inside `group_vars/all/`, Ansible loads all YAML variable files for the `all` group. That means these filenames all work:
-
-- `main.yml`
-- `all.yml`
-- `base.yml`
-- `vault.yml`
-
-What matters is the directory:
-
-```text
-group_vars/all/
-```
-
-## Playbook Layout
-
-`site.yml` applies roles in this order:
+`site.yml` currently applies:
 
 1. `common` to all hosts
-2. `postgres`, `rabbitmq`, `redis` to `data`
-3. `history` to `history`
-4. `proxy` to `proxy`
-5. `ui` to `ui`
+2. `postgres`, `rabbitmq`, and `redis` to the `data` host
+
+That means the supported provisioning sequence is:
+
+1. start `devops-data`
+2. refresh `ansible/known_hosts`
+3. run the Ansible playbook
 
 ## Commands
 
-Run full deployment:
+### Full Provisioning
 
 ```bash
 ansible-playbook ansible/site.yml --ask-vault-pass
 ```
 
-Run one host group:
+### Provision Only The Data Host
 
 ```bash
-ansible-playbook ansible/site.yml --limit ui --ask-vault-pass
-ansible-playbook ansible/site.yml --limit proxy --ask-vault-pass
-ansible-playbook ansible/site.yml --limit history --ask-vault-pass
 ansible-playbook ansible/site.yml --limit data --ask-vault-pass
 ```
 
-## Vault
-
-To inspect encrypted variables:
+### View The Vault
 
 ```bash
 ansible-vault view ansible/group_vars/all/vault.yml
 ```
 
-If you get decryption errors, the usual causes are:
+### Prepare SSH Host Keys
 
-- wrong vault password
-- wrong file location
-- wrong encrypted file
-
-## SSH Notes
-
-`ansible.cfg` contains:
-
-```ini
-host_key_checking = False
+```bash
+: > ansible/known_hosts
+ssh-keyscan -H 192.168.56.14 >> ansible/known_hosts
 ```
 
-This disables SSH host key verification, which is convenient for frequently recreated Vagrant VMs.
+## Vault
+
+If decryption fails, check:
+
+- the vault password is correct
+- the encrypted file is `ansible/group_vars/all/vault.yml`
+- you are not pointing Ansible at the wrong file
 
 ## Troubleshooting
 
-### Variable is undefined
+### SSH Fails
 
-If a variable such as `postgres_password` is undefined, first check that the file is in:
+Check:
 
-```text
-ansible/group_vars/all/vault.yml
-```
-
-and not in:
-
-```text
-ansible/group_vars/vault.yml
-```
-
-### Service file changed but systemd still uses old values
-
-Check that:
-
-- the template task ran
-- handler performed `daemon-reload`
-- the service was restarted
+- `devops-data` is running
+- `ansible/known_hosts` was refreshed
+- the private key path in `host_vars/devops-data.yml` points to the current Vagrant machine
 
 Useful commands:
 
 ```bash
-sudo systemctl cat ui.service
-sudo systemctl cat proxy.service
-sudo systemctl cat history.service
+vagrant status
+vagrant ssh devops-data
+```
+
+### PostgreSQL Is Unavailable After Provisioning
+
+Check:
+
+```bash
+vagrant ssh devops-data -c "sudo systemctl status postgresql"
+```
+
+If needed, rerun only provisioning:
+
+```bash
+ansible-playbook ansible/site.yml --limit data --ask-vault-pass
+```
+
+### RabbitMQ Is Unavailable After Provisioning
+
+Check:
+
+```bash
+vagrant ssh devops-data -c "sudo systemctl status rabbitmq-server"
+vagrant ssh devops-data -c "sudo rabbitmqctl list_users"
+```
+
+### Redis Is Unavailable After Provisioning
+
+Check:
+
+```bash
+vagrant ssh devops-data -c "sudo systemctl status redis-server"
+```
+
+### Time Or Timezone Looks Wrong
+
+The provisioning roles configure timezone and chrony on the data VM. Verify:
+
+```bash
+vagrant ssh devops-data -c "date"
+vagrant ssh devops-data -c "timedatectl"
 ```

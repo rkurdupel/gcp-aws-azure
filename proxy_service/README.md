@@ -1,23 +1,24 @@
 # Proxy Service
 
-Flask service that fetches live cryptocurrency prices from Coinbase and sends them to RabbitMQ.
-
 ## Responsibility
 
-- provides live prices for supported coins
-- periodically refreshes prices in the background
-- sends messages to RabbitMQ for the history service
+The proxy service is a Flask application that:
+
+- fetches live spot prices from Coinbase
+- returns the current price to the UI
+- publishes price messages to RabbitMQ
+- refreshes supported coins in the background
 
 ## Runtime
 
 - language: Python 3
 - framework: Flask
-- service port: `5001`
-- host VM: `devops-proxy`
+- container port: `5001`
+- Docker host access: `http://localhost:5001`
 
 ## Endpoints
 
-- `GET /price/<coin>` - fetches current price and sends it to RabbitMQ
+- `GET /price/<coin>` - fetch a live price and publish it to RabbitMQ
 
 Supported coins:
 
@@ -29,8 +30,8 @@ Supported coins:
 ## External Dependencies
 
 - Coinbase spot price API
-- RabbitMQ
-- History service
+- RabbitMQ on `devops-data`
+- history service inside Docker Compose
 
 ## Environment Variables
 
@@ -40,53 +41,68 @@ Supported coins:
 - `RABBITMQ_QUEUE`
 - `HISTORY_HOST`
 
-These variables are rendered by Ansible into `proxy.service`.
+Current runtime expectations:
 
-## Systemd
-
-Unit template:
-
-- `ansible/roles/proxy/templates/proxy.service.j2`
+- `RABBITMQ_HOST=192.168.56.14`
+- `HISTORY_HOST=history`
 
 ## Docker
 
-- Dockerfile: `proxy_service/Dockerfile`
-- exposed application port: `5001`
-- Docker Compose host access: `http://localhost:5001`
-
-Useful commands on `devops-proxy`:
+Start the full stack:
 
 ```bash
-sudo systemctl status proxy
-sudo journalctl -u proxy.service -n 50
-sudo systemctl cat proxy.service
-sudo systemctl show proxy.service -p Environment
+docker compose up --build
+```
+
+Show proxy logs:
+
+```bash
+docker compose logs proxy
+```
+
+Stop the stack:
+
+```bash
+docker compose down
 ```
 
 ## Common Problems
 
-### `RabbitMQ error: 'NoneType' object has no attribute 'encode'`
+### RabbitMQ Publish Errors
 
-Cause:
+Likely causes:
 
-- one of the RabbitMQ environment variables is missing, usually `RABBITMQ_PASS`
+- RabbitMQ is not running on `devops-data`
+- `RABBITMQ_PASS` is wrong
+- queue settings in `.env` do not match the provisioned user and queue
 
 Check:
 
 ```bash
-sudo systemctl cat proxy.service
-sudo systemctl show proxy.service -p Environment
+docker compose logs proxy
+vagrant ssh devops-data -c "sudo rabbitmqctl list_users"
 ```
 
-### Prices are inserted in unexpected order
+### Coinbase Fetch Errors
 
-Cause:
+Likely causes:
 
-- prices are fetched sequentially
-- whichever response is processed first reaches RabbitMQ and PostgreSQL first
-- rows with equal timestamps need explicit SQL ordering if a fixed display order is required
+- outbound network issue
+- Coinbase API unavailable
+- request timeout
+
+Check:
+
+```bash
+docker compose logs proxy
+```
+
+### Unexpected Insert Timing
+
+The proxy refreshes supported coins in a background loop. In the current code, `UPDATE_INTERVAL_SECONDS` is `180`, so automatic refreshes happen every 3 minutes unless a live request triggers an earlier publish.
 
 ## Notes
 
-- this service uses Flask's built-in server
-- background updates run every 3 minutes
+- prices are fetched sequentially for the background refresh loop
+- whichever message is processed first can appear first in downstream storage
+- this service uses Flask’s built-in server for the lab environment

@@ -2,6 +2,7 @@ services:
   ui:
     build: ./ui
     ports:
+      # the first port is the port on the host machine (browser), and the second port is the port on the container
       - "5000:5000"
     depends_on:
       - proxy

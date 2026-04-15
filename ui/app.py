@@ -6,7 +6,7 @@ import os
 
 app = Flask(__name__)
 # for signing session cookies
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")  # is received from systemd service file (ui.service.j2 (jinja2)) in ansible (incl vault)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")  # is received from .env  file (ui.service.j2 (jinja2)) in ansible (incl vault)
 app.config["SESSION_TYPE"] = "redis"
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_REDIS"] = redis.Redis(
