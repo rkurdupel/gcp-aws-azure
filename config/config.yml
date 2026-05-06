@@ -1,0 +1,139 @@
+cloud: aws
+# cloud: aws / gcp
+
+project:
+  name: coinops
+  gcp_project_id: coinops-dev
+
+defaults:
+  size: small
+  image: ubuntu_2404
+  disk_size_gb: 20
+  
+region_map:
+  aws: eu-central-1
+  gcp: europe-central2
+zone_map: 
+  aws: eu-central-1a
+  gcp: europe-central2-a
+
+instance_type_map:
+  small:
+    aws: t3.micro
+    gcp: e2-micro
+
+  medium:
+    aws: t3.small
+    gcp: e2-small
+
+  large:
+    aws: t3.medium
+    gcp: e2-medium
+
+image_map:
+    ubuntu_2404:
+      aws:
+        owner: "099720109477"
+        name_pattern: "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"
+      gcp: "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
+
+    ubuntu_2204:
+      aws:
+        owner: "099720109477"
+        name_pattern: "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"
+      gcp: "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"
+
+    debian_12:
+      aws:
+        owner: "136693071363"
+        name_pattern: "debian-12-amd64-*"
+      gcp: "projects/debian-cloud/global/images/family/debian-12"
+
+    debian_13:
+      aws:
+        owner: "136693071363"
+        name_pattern: "debian-13-amd64-*"
+      gcp: "projects/debian-cloud/global/images/family/debian-13"
+
+network:
+  name: coinops-network
+  subnet_name: coinops-subnet
+  cidr: 10.10.0.0/16
+  subnet_cidr: 10.10.0.0/24
+  gcp_auto_create_subnetworks: false
+  aws_dns_support: true
+  aws_dns_hostnames: true
+
+ssh:
+  user: rkurdupel
+  public_key_path: ~/.ssh/id_ed25519.pub
+  port: 22
+
+vms:
+  bastion:
+    size: small
+    image: ubuntu_2404
+    public: true
+    private_ip: 10.10.0.10
+    tags:
+      - bastion
+  private-1:
+    size: small
+    image: ubuntu_2404
+    public: false
+    private_ip: 10.10.0.11
+    tags:
+      - private
+  private-2:
+    size: small
+    image: ubuntu_2404
+    public: false
+    private_ip: 10.10.0.12
+    tags:
+      - private
+  private-3:
+    size: small
+    image: ubuntu_2404
+    public: false
+    private_ip: 10.10.0.13
+    tags:
+      - private
+
+firewall:
+  bastion_ssh:
+    protocol: tcp
+    ports:
+      - "22"
+    sources:
+      cidrs:
+        - 194.44.131.115/32
+      groups: []
+    targets:
+      groups:
+        - bastion
+  private_ssh:
+    protocol: tcp
+    ports: 
+      - "22"
+    sources:
+      cidrs: []
+      groups:
+        - bastion
+    targets:
+      groups:
+        - private
+  private_internal:
+    protocol: tcp
+    ports: 
+      - "22"
+    sources:
+      cidrs: []
+      groups:
+        - private
+    targets:
+      groups:
+        - private
+
+
+
+
