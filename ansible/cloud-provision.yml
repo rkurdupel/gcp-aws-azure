@@ -1,0 +1,44 @@
+# before connecting to any vm check if ssh_key_path is set
+- name: validate required env vars
+  hosts: localhost
+  connection: localhost
+  tasks:
+    - name: check SSH is set
+      assert:
+        that:
+          - lookup('env', 'SSH_KEY_PATH') != ''
+        fail_msg: |
+          SSH_KEY_PATH is not set.
+          Run: export SSH_KEY_PATH=~/.ssh/id_ed25519
+
+
+# run common and docker roles on all cloud group VMs (bastion, db, app-1, app-2)
+- name: common setup and docker on cloud nodes
+  hosts: cloud
+  become: true
+  roles:
+    - common
+    - docker
+
+
+- name: provision db VM
+  hosts: db
+  become: true
+  tasks:
+    - name: create postgres data directory
+      ansible.builtin.file:
+        path: /var/lib/coinops/postgres
+        state: directory
+        mode: '0700'
+
+    - name: create rabbitmq data directory
+      ansible.builtin.file:
+        path: /var/lib/coinops/rabbitmq
+        state: directory
+        mode: '0755'
+
+    - name: create redis data directory
+      ansible.builtin.file:
+        path: /var/lib/coinops/redis
+        state: directory
+        mode: '0755'

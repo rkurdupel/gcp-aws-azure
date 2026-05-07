@@ -1,0 +1,103 @@
+# create dir on the db vm where docker compose files will live
+- name: deploy db vm
+  hosts: db
+  become: true
+  tasks:
+    - name: create db directory
+      ansible.builtin.file:
+        path: /opt/coinops/cloud-db
+        # create as a folder
+        state: directory
+        # owner - who owns the file - can read write this file
+        # group - who is in group can access file (created in main.yml (create app user))
+        owner: rkurdupel
+        group: rkurdupel
+        mode: '0755'
+    
+    # copy db docker compose template to the db, filling in variables like password and ips
+    - name: copy db compose file
+      ansible.builtin.template:
+        src: cloud-db.compose.yaml.j2
+        dest: /opt/coinops/cloud-db/compose.yaml
+        owner: rkurdupel
+        group: rkurdupel
+        mode: '0644'
+        
+    - name: copy db env file
+      ansible.builtin.template:
+        src: cloud-db.env.j2
+        dest: /opt/coinops/cloud-db/.env
+        owner: rkurdupel
+        group: rkurdupel
+        mode: '0640'
+
+    - name: run db compose
+      ansible.builtin.command:
+        # up -d start in background (detached) , --remove-orphans - remove cointaners not in compose file anymore, -f specify file path
+        # --build force docker to rebuild image every time ansible runs (any code changes are picked up on all vms automatically)
+        cmd: docker compose -f /opt/coinops/cloud-db/compose.yaml up -d --build --remove-orphans
+        chdir: /opt/coinops/cloud-db
+
+- name: deploy app vms
+  hosts: app
+  become: true
+  tasks:
+    - name: create app directory
+      ansible.builtin.file:
+        path: /opt/coinops/cloud-app
+        state: directory
+        owner: rkurdupel
+        group: rkurdupel
+        mode: '0755'
+
+    - name: copy app compose file
+      ansible.builtin.template:
+        src: cloud-app.compose.yaml.j2
+        dest: /opt/coinops/cloud-app/compose.yaml
+        owner: rkurdupel
+        group: rkurdupel
+        mode: '0644'
+
+    - name: copy nginx config
+      ansible.builtin.template:
+        src: cloud-nginx.conf.j2
+        dest: /opt/coinops/cloud-app/nginx.conf
+        owner: rkurdupel
+        group: rkurdupel
+        mode: '0644'
+
+    - name: copy app env file
+      ansible.builtin.template:
+        src: cloud-app.env.j2
+        dest: /opt/coinops/cloud-app/.env
+        mode: '0640'
+  
+    - name: copy app source code
+      ansible.builtin.copy:
+        src: "{{item}}" # item gets from loop below
+        dest: /opt/coinops
+        mode: '0755'
+      loop:
+        - ../ui
+        - ../proxy_service
+        - ../history_service
+
+    - name: run app compose
+      ansible.builtin.command:
+        cmd: docker compose -f /opt/coinops/cloud-app/compose.yaml up -d --build --remove-orphans
+        chdir: /opt/coinops/cloud-app
+    - name: restart nginx to reload config
+      ansible.builtin.command:
+        cmd: docker compose -f /opt/coinops/cloud-app/compose.yaml restart nginx
+        chdir: /opt/coinops/cloud-app
+    # uri uses url module to make an http request
+    - name: wait for health endpoint
+      ansible.builtin.uri:
+        url: http://localhost/health
+        # consider the task only successful if response if 200 OK 
+        status_code: 200
+      retries: 12 # try 12 times
+      delay: 5  # 5 seconds between each try
+      register: health  # save the response into variable health 
+      until: health.status == 200 # keep trying until status = 200
+

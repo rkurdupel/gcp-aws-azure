@@ -1,5 +1,0 @@
-# activates only if in postgres yml are changes in the config
-- name: restart postgresql
-  service:
-    name: postgresql
-    state: restarted

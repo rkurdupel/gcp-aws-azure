@@ -22,6 +22,52 @@ resource "aws_security_group" "bastion" {
   }
 }
 
+resource "aws_security_group" "db" {
+  name   = "${var.network_name}-db-sg"
+  vpc_id = var.network_id
+
+  ingress {
+    description     = "SSH from bastion"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
+  ingress {
+    description     = "PostgreSQL from app VMs"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.private.id]
+  }
+
+  ingress {
+    description     = "RabbitMQ from app VMs"
+    from_port       = 5672
+    to_port         = 5672
+    protocol        = "tcp"
+    security_groups = [aws_security_group.private.id]
+  }
+
+  ingress {
+    description     = "Redis from app VMs"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.private.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.network_name}-db-sg" }
+}
+
 resource "aws_security_group" "private" {
   name   = "${var.network_name}-private-sg"
   vpc_id = var.network_id
@@ -44,6 +90,15 @@ resource "aws_security_group" "private" {
     self = true
   }
 
+  # app vm only accept http from alb , not directly from internet
+  ingress {
+    description =  "HTTP to app vm only through ALB"
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+    security_groups = [aws_security_group.lb.id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -55,3 +110,28 @@ resource "aws_security_group" "private" {
     Name = "${var.network_name}-private-sg"
   }
 }
+
+resource "aws_security_group" "lb" {
+  name = "${var.network_name}-lb-sg"
+  vpc_id = var.network_id
+
+  ingress {
+    from_port = 80
+    to_port = 80
+    protocol = var.protocol
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # allow traffic out from all ports and all protocols
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.network_name}-lb-sg"
+  }
+}
+
