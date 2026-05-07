@@ -4,3 +4,6 @@ __pycache__/
 history-service/history-service
 ansible/known_hosts
 .env
+terraform/.terraform/
+*.tfstate
+*.tfstate.*

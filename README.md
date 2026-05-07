@@ -1,349 +1,484 @@
 # Currency Rates Tracker
 
-## Overview
+Currency Rates Tracker is a multi-service crypto price application. It collects live prices, stores historical data, and serves a web UI through an AWS Application Load Balancer.
 
-Currency Rates Tracker is a small multi-service lab project for collecting, storing, and displaying cryptocurrency prices.
+The current working tree has moved from the older local/Vagrant deployment model to an AWS cloud deployment model with Terraform, Ansible, Docker Compose, ALB, private app/database VMs, and optional Cloudflare DNS.
 
-The supported deployment model is:
+## What Changed From The GitHub Baseline
 
-- one Vagrant VM named `devops-data`
-- Ansible provisioning for PostgreSQL, RabbitMQ, and Redis on that VM
-- Docker Compose for the application layer: `ui`, `proxy`, and `history`
+Compared with `origin/kurdupel` on `https://github.com/rkurdupel/status`, the new implementation changes the deployment architecture.
 
-## Architecture
+Major changes:
+
+1. Replaced the old single `devops-data` Vagrant-style data VM flow with AWS infrastructure.
+2. Added AWS public/private networking:
+   - public subnet for bastion and ALB
+   - private subnet for DB and app VMs
+   - NAT Gateway for private VM outbound internet access
+   - second public subnet in another Availability Zone for ALB
+3. Added an Application Load Balancer:
+   - public HTTP entry point
+   - target group for app VMs
+   - `/health` checks
+   - load balancing across `app-1` and `app-2`
+   - sticky sessions with ALB cookie
+4. Split VM roles:
+   - `bastion` is public and used for SSH jump access
+   - `db` is private and runs PostgreSQL, RabbitMQ, and Redis
+   - `app-1` and `app-2` are private and run nginx, UI, proxy, and history containers
+5. Added separate security groups:
+   - bastion accepts SSH only from the operator IP
+   - app VMs accept HTTP only from the ALB
+   - DB VM accepts PostgreSQL, RabbitMQ, and Redis only from app VMs
+6. Added Cloudflare DNS support:
+   - creates a CNAME record pointing a hostname to the ALB DNS name
+7. Replaced old Ansible roles for native PostgreSQL/RabbitMQ/Redis installs with Docker Compose templates on cloud VMs.
+8. Added Terraform outputs for generated Ansible inventory and SSH config.
+9. Changed `history_service` to read `POSTGRES_PASSWORD` and connect to PostgreSQL with `sslmode=disable`.
+
+Security note: do not commit real AWS keys, Cloudflare tokens, passwords, or generated Terraform provider directories. If any real credentials were committed or shared, rotate them.
+
+## Current Architecture
 
 ```mermaid
 flowchart LR
-    User[User]
-    UI[UI Service]
-    Proxy[API Proxy Service]
-    Coinbase[Public API<br/>Coinbase]
-    Rabbit[RabbitMQ]
-    History[History Service<br/>Consumer + History API]
-    Postgres[(PostgreSQL)]
-    Redis[(Redis)]
+    User[User Browser]
+    DNS[Cloudflare DNS]
+    ALB[AWS Application Load Balancer]
+    App1[Private App VM 1<br/>nginx + ui + proxy + history]
+    App2[Private App VM 2<br/>nginx + ui + proxy + history]
+    Bastion[Public Bastion VM]
+    DB[Private DB VM<br/>PostgreSQL + RabbitMQ + Redis]
+    Coinbase[Coinbase API]
 
-    User --> UI
-    UI -- request current data --> Proxy
-    Proxy -- fetch external data --> Coinbase
-    Coinbase -- response --> Proxy
-    Proxy -- current response --> UI
-    Proxy -- publish price message --> Rabbit
-    Rabbit -- send message --> History
-    History -- save data --> Postgres
-    UI -- request saved data --> History
-    History -- return saved data --> UI
-    UI <--> Redis
+    User --> DNS
+    DNS --> ALB
+    ALB --> App1
+    ALB --> App2
+    Bastion -. SSH jump .-> App1
+    Bastion -. SSH jump .-> App2
+    Bastion -. SSH jump .-> DB
+    App1 --> DB
+    App2 --> DB
+    App1 --> Coinbase
+    App2 --> Coinbase
 ```
 
 Request flow:
 
-1. The browser opens the UI on `http://localhost:5000`
-2. The UI requests a live price from the proxy service
-3. The proxy fetches the spot price from Coinbase
-4. The proxy publishes price messages to RabbitMQ on `devops-data`
-5. The history service consumes RabbitMQ messages and writes them to PostgreSQL on `devops-data`
-6. The UI requests historical rows and chart points from the history service
-7. The UI stores session state in Redis on `devops-data`
+1. User opens the Cloudflare hostname or ALB DNS name.
+2. ALB receives HTTP traffic on port `80`.
+3. ALB forwards the request to a healthy app VM.
+4. nginx on the app VM serves `/health` directly and proxies app traffic to containers.
+5. UI calls the proxy service for live prices.
+6. Proxy fetches live prices from Coinbase and publishes messages to RabbitMQ.
+7. History service consumes RabbitMQ messages and stores rows in PostgreSQL.
+8. UI reads historical/chart data from the history service.
+9. UI stores session state in Redis.
 
 ## Repository Structure
 
 ```text
 .
-├── Vagrantfile
-├── deploy.sh
-├── docker-compose.yml
-├── .env
-├── .env.example
+├── config/config.yml
+├── terraform/
+│   ├── main.tf
+│   ├── provider.tf
+│   ├── versions.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── modules/aws/
+│       ├── network/
+│       ├── firewall/
+│       ├── vm/
+│       └── load_balancer/
 ├── ansible/
-│   ├── inventory.ini
-│   ├── group_vars/
-│   ├── host_vars/
+│   ├── cloud-provision.yml
+│   ├── cloud-deploy.yml
+│   ├── inventory.cloud
 │   ├── roles/
-│   ├── known_hosts
-│   └── site.yml
+│   └── templates/
+├── scripts/
+│   ├── post-apply.sh
+│   └── verify_failover.sh
 ├── ui/
 ├── proxy_service/
 └── history_service/
 ```
 
-Directory responsibilities:
+Important files:
 
-- `Vagrantfile` defines the `devops-data` VM
-- `deploy.sh` starts the VM, refreshes `known_hosts`, and runs Ansible
-- `docker-compose.yml` starts the application containers
-- `ansible/` provisions PostgreSQL, RabbitMQ, and Redis on `devops-data`
-- `ui/` contains the Flask frontend
-- `proxy_service/` contains the Flask live-price proxy
-- `history_service/` contains the Go history worker/API
+- `config/config.yml` controls cloud, region, CIDRs, VM names, VM IPs, and tags.
+- `terraform/modules/aws/network` creates VPC, public/private subnets, route tables, Internet Gateway, NAT Gateway, and second public subnet for ALB.
+- `terraform/modules/aws/firewall` creates bastion, app/private, DB, and ALB security groups.
+- `terraform/modules/aws/load_balancer` creates the ALB, target group, listener, health check, and stickiness.
+- `terraform/modules/aws/main.tf` wires VMs, ALB target attachments, and Cloudflare DNS.
+- `ansible/cloud-provision.yml` installs common packages and Docker on cloud VMs.
+- `ansible/cloud-deploy.yml` deploys Docker Compose stacks to DB and app VMs.
+- `ansible/templates/cloud-nginx.conf.j2` defines `/health`, `/api`, `/history-api`, and UI proxying.
 
 ## Prerequisites
 
-Install these tools on the host machine:
+Install locally:
 
-- Vagrant
-- VirtualBox
-- Docker Engine with Docker Compose
+- Terraform
+- AWS CLI
 - Ansible
+- SSH client
+- Docker only if you also run the local compose stack
 
-You also need:
+You need:
 
-- network access from the host and containers to the data VM
-- a valid Ansible vault password for `ansible/group_vars/all/vault.yml`
+- AWS credentials with permission to create VPC, EC2, security groups, NAT Gateway, ALB, target groups, and S3 backend access.
+- Existing S3 backend bucket configured in `terraform/backend.tf`.
+- SSH public key path from `config/config.yml`.
+- Cloudflare API token with DNS edit permission for the target zone.
+- Cloudflare zone ID.
 
-## Configuration
+## Required Environment Variables
 
-### Docker Environment
-
-Create the runtime environment file:
-
-```bash
-cp .env.example .env
-```
-
-Current `.env.example` values:
-
-```dotenv
-REDIS_HOST=192.168.56.14
-REDIS_PORT=6379
-REDIS_PASSWORD=coinops
-PROXY_HOST=proxy
-HISTORY_HOST=history
-RABBITMQ_HOST=192.168.56.14
-RABBITMQ_USER=currency_app_user
-RABBITMQ_PASS=coinops
-RABBITMQ_QUEUE=currency_rates
-POSTGRES_HOST=192.168.56.14
-POSTGRES_DB=currency_rates_tracker
-POSTGRES_USER=currency_app_user
-POSTGRES_PASS=password
-POSTGRES_TABLE=currency_rates
-SECRET_KEY=coinops
-```
-
-How those values are used:
-
-- `PROXY_HOST=proxy` and `HISTORY_HOST=history` are Docker service names used for container-to-container communication
-- `REDIS_HOST`, `RABBITMQ_HOST`, and `POSTGRES_HOST` point at the `devops-data` VM
-- `SECRET_KEY` is used by the UI Flask app
-
-### Ansible Variables
-
-Non-secret shared values live in:
-
-```text
-ansible/group_vars/all/main.yml
-```
-
-Secrets live in:
-
-```text
-ansible/group_vars/all/vault.yml
-```
-
-The data-layer deployment depends on these values:
-
-- PostgreSQL host, database, table, and application user
-- RabbitMQ host, application user, and queue
-- Redis host and port
-- passwords for PostgreSQL, RabbitMQ, and Redis
-
-## Deployment
-
-There are two supported ways to start the environment.
-
-### Option 1: Use `deploy.sh` and then start Docker
+Export these before Terraform and Ansible.
 
 ```bash
-./deploy.sh
-cp .env.example .env
-docker compose up --build
+export AWS_ACCESS_KEY_ID="<aws-access-key>"
+export AWS_SECRET_ACCESS_KEY="<aws-secret-key>"
+export AWS_DEFAULT_REGION="eu-central-1"
+
+export SSH_KEY_PATH="$HOME/.ssh/id_ed25519"
+
+export POSTGRES_USER="currency_app_user"
+export POSTGRES_PASS="<postgres-password>"
+export POSTGRES_DB="currency_rates_tracker"
+export POSTGRES_TABLE="currency_rates"
+
+export RABBITMQ_USER="currency_app_user"
+export RABBITMQ_PASS="<rabbitmq-password>"
+export RABBITMQ_QUEUE="currency_rates"
+
+export REDIS_PASSWORD="<redis-password>"
+export SECRET_KEY="<flask-secret-key>"
+
+export TF_VAR_cloudflare_api_token="<cloudflare-api-token>"
+export TF_VAR_cloudflare_zone_id="<cloudflare-zone-id>"
 ```
 
-What `deploy.sh` does:
+Cloudflare token format must be only the raw token. Do not include `Bearer`, quotes inside the value, spaces, or newlines.
 
-1. starts the `devops-data` VM
-2. refreshes `ansible/known_hosts` with the VM SSH host key
-3. runs `ansible-playbook ansible/site.yml --ask-vault-pass`
+## Deploy To AWS
 
-### Option 2: Run the steps manually
+### 1. Review Config
+
+Check `config/config.yml`:
+
+```yaml
+cloud: aws
+location: eu-central-1
+
+network:
+  cidr: 10.10.0.0/16
+  subnet_cidr: 10.10.0.0/24
+  private_subnet_cidr: 10.10.1.0/24
+  second_public_subnet_cidr: 10.10.2.0/24
+
+instances:
+  bastion:
+    public: true
+    private_ip: 10.10.0.10
+  db:
+    public: false
+    private_ip: 10.10.1.11
+  app-1:
+    public: false
+    private_ip: 10.10.1.12
+  app-2:
+    public: false
+    private_ip: 10.10.1.13
+```
+
+### 2. Create Infrastructure
 
 ```bash
-vagrant up devops-data
-: > ansible/known_hosts
-ssh-keyscan -H 192.168.56.14 >> ansible/known_hosts
-ansible-playbook ansible/site.yml --ask-vault-pass
-cp .env.example .env
-docker compose up --build
+cd terraform
+terraform init -upgrade
+terraform plan
+terraform apply
 ```
 
-If you want containers in the background:
+Useful outputs:
 
 ```bash
-docker compose up --build -d
+terraform output alb_dns_name
+terraform output bastion_public_ip
+terraform output -raw ansible_inventory
+terraform output -raw ssh_config
 ```
 
-## Services And Ports
+### 3. Generate Inventory And SSH Config
 
-### UI
+From repo root:
 
-- container port: `5000`
-- host access: `http://localhost:5000`
-- responsibility: render the dashboard, history page, and chart data for the browser
+```bash
+./scripts/post-apply.sh
+```
 
-### Proxy
+This writes:
 
-- container port: `5001`
-- host access: `http://localhost:5001`
-- responsibility: fetch live prices from Coinbase and publish them to RabbitMQ
+- `ansible/inventory.cloud`
+- `~/.ssh/coinops-aws.generated`
 
-### History
+It also adds an `Include` line to `~/.ssh/config` if needed.
 
-- container port: `5002`
-- host access: `http://localhost:5002`
-- responsibility: consume queued price updates, store them in PostgreSQL, and serve history/chart endpoints
+Test SSH:
 
-### Data VM
+```bash
+ssh coinops-bastion
+ssh coinops-db
+ssh coinops-app-1
+ssh coinops-app-2
+```
 
-- VM name: `devops-data`
-- private IP: `192.168.56.14`
-- services:
+### 4. Provision VMs
+
+From repo root:
+
+```bash
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-provision.yml
+```
+
+This installs common packages and Docker on all cloud nodes, then creates persistent data directories on the DB VM.
+
+### 5. Deploy Containers
+
+```bash
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-deploy.yml
+```
+
+This deploys:
+
+- DB VM:
   - PostgreSQL on `5432`
   - RabbitMQ on `5672`
   - Redis on `6379`
+- App VMs:
+  - nginx on host port `80`
+  - UI container on `5000`
+  - proxy container on `5001`
+  - history container on `5002`
 
-## Data Flow
+The app deploy uses `docker compose up -d --build --remove-orphans`, so code changes are rebuilt during deployment.
 
-### Live Price Request
+### 6. Open The Website
 
-1. The browser loads the UI
-2. The UI calls `http://proxy:5001/price/<coin>` from inside Docker
-3. The proxy fetches the latest Coinbase spot price
-4. The proxy sends the price message to RabbitMQ on `devops-data`
-5. The UI displays the current price response immediately
-
-### Historical Data Recording
-
-1. The history service consumes RabbitMQ messages
-2. The history service validates and deduplicates records within a short window
-3. The history service inserts rows into PostgreSQL
-
-### Chart And Table Reads
-
-1. The UI calls the history service on `http://history:5002`
-2. The history service reads from PostgreSQL
-3. The history service returns JSON for tables, stats, and charts
-
-## Useful Commands
-
-### Vagrant
+Use either:
 
 ```bash
-vagrant up devops-data
-vagrant halt devops-data
-vagrant reload devops-data
-vagrant ssh devops-data
+terraform -chdir=terraform output -raw alb_dns_name
 ```
 
-### Ansible
+Then open:
+
+```text
+http://<alb-dns-name>
+```
+
+If Cloudflare DNS was applied, open the configured hostname, for example:
+
+```text
+http://app.<your-domain>
+```
+
+## Verify Deployment
+
+Check ALB health:
 
 ```bash
-ansible-playbook ansible/site.yml --ask-vault-pass
-ansible-playbook ansible/site.yml --limit data --ask-vault-pass
+curl -i "http://$(terraform -chdir=terraform output -raw alb_dns_name)/health"
 ```
 
-### Docker Compose
+Expected:
+
+```text
+HTTP/1.1 200 OK
+{"status": "ok"}
+```
+
+Check app VMs directly through SSH:
 
 ```bash
-docker compose up --build
-docker compose up --build -d
-docker compose down
-docker compose ps
-docker compose logs ui
-docker compose logs proxy
-docker compose logs history
+ssh coinops-app-1 'curl -i http://localhost/health'
+ssh coinops-app-2 'curl -i http://localhost/health'
 ```
 
-### Database Check
+Check containers:
 
 ```bash
-PGPASSWORD=postgres psql -h localhost -U postgres -d currency_rates_tracker -c "SELECT coin, recorded_at, price FROM currency_rates ORDER BY recorded_at DESC LIMIT 20;"
+ssh coinops-db 'cd /opt/coinops/cloud-db && sudo docker compose ps'
+ssh coinops-app-1 'cd /opt/coinops/cloud-app && sudo docker compose ps'
+ssh coinops-app-2 'cd /opt/coinops/cloud-app && sudo docker compose ps'
 ```
+
+Check logs:
+
+```bash
+ssh coinops-app-1 'sudo docker logs cloud-app-nginx-1 --tail 50'
+ssh coinops-app-1 'sudo docker logs cloud-app-ui-1 --tail 50'
+ssh coinops-app-1 'sudo docker logs cloud-app-proxy-1 --tail 50'
+ssh coinops-app-1 'sudo docker logs cloud-app-history-1 --tail 50'
+```
+
+## Failover Test
+
+The helper script checks that the app still responds after one app VM is stopped:
+
+```bash
+./scripts/verify_failover.sh
+```
+
+Review the hard-coded ALB URL, AWS region, and target group ARN in the script before running it in a new environment.
+
+## How The ALB Works
+
+The ALB is the public website entry point:
+
+```text
+User -> ALB -> app-1/app-2
+```
+
+The app VMs are private. Users do not access them directly.
+
+The ALB target group:
+
+- sends traffic only to registered app VMs
+- calls `/health` every 30 seconds
+- marks a VM healthy after 2 successful checks
+- marks a VM unhealthy after 3 failed checks
+- stops sending traffic to unhealthy VMs
+
+Stickiness is enabled with an ALB cookie:
+
+```hcl
+stickiness {
+  type            = "lb_cookie"
+  cookie_duration = 86400
+  enabled         = true
+}
+```
+
+This keeps the same browser on the same app VM for a day. It helps avoid inconsistent UI session behavior when a user clicks between coins or ranges while multiple app VMs are running.
 
 ## Troubleshooting
 
-### Containers cannot reach PostgreSQL, RabbitMQ, or Redis
+### ALB Returns 504
 
-Check:
-
-- `devops-data` is running
-- `ansible-playbook` completed successfully
-- `.env` still points to `192.168.56.14`
-
-Useful checks:
-
-```bash
-vagrant ssh devops-data -c "systemctl status postgresql"
-vagrant ssh devops-data -c "systemctl status rabbitmq-server"
-vagrant ssh devops-data -c "systemctl status redis-server"
-```
-
-### UI returns HTTP 500
-
-Likely causes:
-
-- Redis is unavailable
-- proxy is unavailable
-- history is unavailable
-- `SECRET_KEY` or Redis settings in `.env` are wrong
+Meaning: ALB accepted the request but did not get a timely response from a target.
 
 Check:
 
 ```bash
-docker compose logs ui
+curl -i "http://$(terraform -chdir=terraform output -raw alb_dns_name)/health"
+ssh coinops-app-1 'curl -i http://localhost/health'
+ssh coinops-app-2 'curl -i http://localhost/health'
 ```
 
-### Proxy cannot publish messages
+If app VMs answer locally but ALB returns `504`, check:
 
-Likely causes:
+- ALB security group egress
+- app VM security group allowing port `80` from ALB security group
+- target group registered targets
+- target health in AWS
 
-- RabbitMQ is not running
-- `RABBITMQ_PASS` is wrong
-- queue settings in `.env` do not match the provisioned RabbitMQ user
+### ALB Returns 503
+
+Meaning: ALB has no healthy targets.
 
 Check:
 
 ```bash
-docker compose logs proxy
-vagrant ssh devops-data -c "sudo rabbitmqctl list_users"
+aws elbv2 describe-target-health \
+  --target-group-arn "<target-group-arn>" \
+  --region eu-central-1
 ```
 
-### History service cannot write to PostgreSQL
+### `/health` Works But Website Hangs
 
-Likely causes:
-
-- PostgreSQL is down
-- DB credentials in `.env` do not match the provisioned DB user
-- `POSTGRES_TABLE` is empty or incorrect
+Meaning: nginx is alive, but the app path behind `/` is waiting on UI or backend dependencies.
 
 Check:
 
 ```bash
-docker compose logs history
-vagrant ssh devops-data -c "sudo systemctl status postgresql"
+ssh coinops-app-1 'curl -i --max-time 10 http://localhost/'
+ssh coinops-app-1 'sudo docker logs cloud-app-ui-1 --tail 50'
+ssh coinops-app-1 'sudo docker logs cloud-app-history-1 --tail 50'
 ```
 
-### Time looks wrong inside the VM
+### History Service: SSL Is Not Enabled On The Server
 
-Check the VM clock:
+The history service must connect to PostgreSQL with SSL disabled:
+
+```go
+sslmode=disable
+```
+
+If the code is correct but logs still show:
+
+```text
+pq: SSL is not enabled on the server
+```
+
+Rebuild the history image on app VMs:
 
 ```bash
-vagrant ssh devops-data -c "date"
-vagrant ssh devops-data -c "timedatectl"
+ssh coinops-app-1 'cd /opt/coinops/cloud-app && sudo docker compose build --no-cache history && sudo docker compose up -d history'
+ssh coinops-app-2 'cd /opt/coinops/cloud-app && sudo docker compose build --no-cache history && sudo docker compose up -d history'
 ```
 
-If the VM time drifts, reload the VM and verify time sync again:
+### Cloudflare Provider Error
+
+If Terraform tries to download `hashicorp/cloudflare`, the child module is missing the provider source declaration.
+
+Required in `terraform/modules/aws/versions.tf`:
+
+```hcl
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+    }
+    cloudflare = {
+      source = "cloudflare/cloudflare"
+    }
+  }
+}
+```
+
+Then run:
 
 ```bash
-vagrant reload devops-data
+cd terraform
+terraform init -upgrade
 ```
+
+### Cloudflare Token Validation Error
+
+Cloudflare API tokens may contain only:
+
+```text
+a-z A-Z 0-9 - _
+```
+
+Check token format without printing it:
+
+```bash
+printf '%s' "$TF_VAR_cloudflare_api_token" | LC_ALL=C grep -q '[^A-Za-z0-9_-]' && echo "bad chars" || echo "format ok"
+```
+
+## Cleanup
+
+Destroy cloud infrastructure:
+
+```bash
+cd terraform
+terraform destroy
+```
+
+This removes AWS resources managed by Terraform. It does not rotate exposed secrets or clean local generated files.

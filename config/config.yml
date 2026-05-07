@@ -1,20 +1,31 @@
 cloud: aws
 # cloud: aws / gcp
 
-project:
-  name: coinops
-  gcp_project_id: coinops-dev
+name_prefix: coinops
+location: eu-central-1
+
+clouds:
+  aws:
+    profile: default
 
 defaults:
   size: small
   image: ubuntu_2404
   disk_size_gb: 20
-  
+
+ssh:
+  user: rkurdupel
+  public_key_path: ~/.ssh/id_ed25519.pub
+  port: 22
+
+
 region_map:
   aws: eu-central-1
   gcp: europe-central2
 zone_map: 
-  aws: eu-central-1a
+  aws: 
+    first: eu-central-1a
+    second: eu-central-1b
   gcp: europe-central2-a
 
 instance_type_map:
@@ -60,16 +71,15 @@ network:
   subnet_name: coinops-subnet
   cidr: 10.10.0.0/16
   subnet_cidr: 10.10.0.0/24
+  private_subnet_cidr: 10.10.1.0/24
   gcp_auto_create_subnetworks: false
   aws_dns_support: true
   aws_dns_hostnames: true
+  second_public_subnet_cidr: 10.10.2.0/24
 
-ssh:
-  user: rkurdupel
-  public_key_path: ~/.ssh/id_ed25519.pub
-  port: 22
 
-vms:
+
+instances:
   bastion:
     size: small
     image: ubuntu_2404
@@ -77,63 +87,33 @@ vms:
     private_ip: 10.10.0.10
     tags:
       - bastion
-  private-1:
+
+  db:
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.0.11
+    private_ip: 10.10.1.11
     tags:
-      - private
-  private-2:
+      - db
+  app-1:
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.0.12
+    private_ip: 10.10.1.12
     tags:
-      - private
-  private-3:
+      - app
+  app-2:
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.0.13
+    private_ip: 10.10.1.13
     tags:
-      - private
+      - app
+
 
 firewall:
-  bastion_ssh:
-    protocol: tcp
-    ports:
-      - "22"
-    sources:
-      cidrs:
-        - 194.44.131.115/32
-      groups: []
-    targets:
-      groups:
-        - bastion
-  private_ssh:
-    protocol: tcp
-    ports: 
-      - "22"
-    sources:
-      cidrs: []
-      groups:
-        - bastion
-    targets:
-      groups:
-        - private
-  private_internal:
-    protocol: tcp
-    ports: 
-      - "22"
-    sources:
-      cidrs: []
-      groups:
-        - private
-    targets:
-      groups:
-        - private
-
-
+  ssh_source_ranges:
+    - 194.44.131.115/32
+  
 
 

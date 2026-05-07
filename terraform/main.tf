@@ -6,7 +6,7 @@ module "aws" {
 
   config         = local.config
   ssh_public_key = local.ssh_public_key
-
+  cloudflare_zone_id = var.cloudflare_zone_id
 }
 
 module "gcp" {

@@ -1,15 +1,26 @@
-- name: update apt cache
+- name: Update apt cache
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
-    
-- name: install common packages
+
+- name: Install required packages
   ansible.builtin.apt:
     name:
       - curl
-      - git
+      - ca-certificates
+      - gnupg
+      - python3
+      - python3-pip
     state: present
 
-- name: set timezone for vms
-  become: true
-  ansible.builtin.command: timedatectl set-timezone Europe/Kyiv
+- name: Set timezone to UTC
+  community.general.timezone:
+    name: UTC
+
+- name: create app user
+  ansible.builtin.user:
+    name: rkurdupel
+    shell: /bin/bash
+    create_home: true # creates /home/rkurdupel (on vm)
+    groups: sudo  # add user to sudo group to be able to use sudo (builtin linux group)
+    append: true  # don't remove user from existing groups (docker, ubuntu, adm, etc)

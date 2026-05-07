@@ -1,0 +1,29 @@
+# docker digital signature that approves docker repository
+- name: add docker GPG key
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+# tell docker where to download docker from
+- name: add docker repository
+  ansible.builtin.apt_repository:
+    # ansible distrubtion release is received from vm automatically
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: install docker
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+
+# add user to docker group so he could use docker commands without sudo (sudo docker ps => docker ps)
+- name: add user to docker group
+  ansible.builtin.user:
+    name: rkurdupel
+    groups: docker
+    append: true

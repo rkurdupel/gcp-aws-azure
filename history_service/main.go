@@ -30,7 +30,7 @@ func connectDB() *sql.DB {
 	host := getEnv("POSTGRES_HOST", "")
 	dbname := getEnv("POSTGRES_DB", "")
 	user := getEnv("POSTGRES_USER", "")
-	password := getEnv("POSTGRES_PASS", "")
+	password := getEnv("POSTGRES_PASSWORD", "")
 
 	connStr := fmt.Sprintf(
 		"host=%s dbname=%s user=%s password=%s sslmode=disable",

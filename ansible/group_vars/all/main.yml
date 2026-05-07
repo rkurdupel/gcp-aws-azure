@@ -1,11 +1,18 @@
-postgres_host: 192.168.56.14
-rabbitmq_host: 192.168.56.14
-redis_host: 192.168.56.14
-proxy_host: 192.168.56.12
+# initialize vars from env
 
-postgres_db: currency_rates_tracker
-postgres_table: currency_rates
-postgres_user: currency_app_user
-rabbitmq_user: currency_app_user
-rabbitmq_queue: currency_rates
-redis_port: 6379
+
+postgres_user: "{{ lookup('env', 'POSTGRES_USER') }}"
+postgres_db: "{{ lookup('env', 'POSTGRES_DB') }}"
+postgres_table: "{{ lookup('env', 'POSTGRES_TABLE') }}"
+db_password: "{{ lookup('env', 'POSTGRES_PASS') }}"
+
+
+rabbitmq_user: "{{ lookup('env', 'RABBITMQ_USER') }}"
+rabbitmq_password: "{{ lookup('env', 'RABBITMQ_PASS') }}"
+rabbitmq_queue: "{{ lookup('env', 'RABBITMQ_QUEUE') }}"
+
+
+redis_password: "{{ lookup('env', 'REDIS_PASSWORD') }}"
+
+
+secret_key: "{{ lookup('env', 'SECRET_KEY') }}"
