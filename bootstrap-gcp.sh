@@ -14,7 +14,7 @@ BUCKET_NAME="${BUCKET_NAME:-${PROJECT_ID}-tf-state}"
 LOCATION="${LOCATION:-EU}"
 REGION="${REGION:-europe-central2}"
 KEY_FILE="${KEY_FILE:-$HOME/.secrets/gcp/sa-key.json}"
-ENV_FILE="${ENV_FILE:-.gcp-bootstrap.env}"
+ENV_FILE="${ENV_FILE:-.env}"
 
 echo "Checking if GCP project exists..."
 # gcloud projects describe "${PROJECT_ID}" - Tries to fetch info about your project. 

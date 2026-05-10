@@ -9,28 +9,55 @@ module "network" {
   subnetwork_name         = lookup(var.config.network, "subnet_name", "coinops-subnet")
   subnetwork_cidr         = lookup(var.config.network, "subnet_cidr", "10.10.0.0/24")
   auto_create_subnetworks = lookup(var.config.network, "gcp_auto_create_subnetworks", false)
+  region = lookup(var.config.region_map, "gcp", "europe-central2")
 }
 
 
 
 module "firewall" {
-  for_each = lookup(var.config, "firewall", {})
   source   = "./firewall"
 
-  name          = replace(each.key, "_", "-") # bastion_ssh to bastion-ssh
+  name          = "${lookup(var.config, "name_prefix", "coinops")}-allow-ssh"
   network_id    = module.network.network_id
-  direction     = lookup(each.value, "direction", "INGRESS")
-  source_ranges = lookup(lookup(each.value, "sources", {}), "cidrs", [])
-  source_tags   = lookup(lookup(each.value, "sources", {}), "groups", [])
-  target_tags   = lookup(lookup(each.value, "targets", {}), "groups", [])
-  protocol      = lookup(each.value, "protocol", "tcp")
+  direction     = "INGRESS"
+  source_ranges = lookup(var.config.firewall, "ssh_source_ranges", ["0.0.0.0/0"])
+  source_tags   = []
+  target_tags   = lookup(var.config.instances.bastion, "tags", ["bastion"])
+  protocol      = lookup(var.config.ssh, "protocol", "tcp")
   # convert to string
-  ports = lookup(each.value, "ports", [tostring(lookup(var.config.ssh, "port", 22))])
+  ports = [tostring(lookup(var.config.ssh, "port", 22))]
 }
+
+module "private_ssh" {
+  source = "./firewall"
+  name          = "${lookup(var.config, "name_prefix", "coinops")}-private-ssh"
+  network_id    = module.network.network_id
+  direction     = "INGRESS"
+  source_ranges = []
+  source_tags   = lookup(var.config.instances.bastion, "tags", ["bastion"])
+  target_tags   = ["app", "db"]
+  protocol      = lookup(var.config.ssh, "protocol", "tcp")
+  ports         = [tostring(lookup(var.config.ssh, "port", 22))]
+}
+
+  module "app_to_db" {
+    source = "./firewall"
+
+    name          = "${lookup(var.config, "name_prefix", "coinops")}-app-to-db"
+    network_id    = module.network.network_id
+    direction     = "INGRESS"
+    source_ranges = []
+    source_tags   = ["app"]
+    target_tags   = ["db"]
+    protocol      = "tcp"
+    ports         = ["5432", "5672", "6379"]
+  }
+
+
 
 module "vm" {
   source   = "./vm"
-  for_each = lookup(var.config, "vms", {}) # looping vm block from config
+  for_each = lookup(var.config, "instances", {}) # looping vm block from config
   name     = each.key                      #  name of the vm from so config (bastion, private-1)
   zone     = lookup(var.config.zone_map, local.cloud, "europe-central2-a")
   machine_type = lookup(

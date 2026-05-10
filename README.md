@@ -269,7 +269,7 @@ The app deploy uses `docker compose up -d --build --remove-orphans`, so code cha
 
 ### 6. Open The Website
 
-Use either:
+For AWS deployments, use the ALB DNS name:
 
 ```bash
 terraform -chdir=terraform output -raw alb_dns_name
@@ -285,6 +285,18 @@ If Cloudflare DNS was applied, open the configured hostname, for example:
 
 ```text
 http://app.<your-domain>
+```
+
+For the current GCP setup in this repo, the app VMs are private and do not expose a public website endpoint. Use an SSH tunnel through the bastion to reach `app-1` from your browser:
+
+```bash
+ssh -N -L 19080:127.0.0.1:80 -J rkurdupel@<bastion-public-ip> rkurdupel@10.10.1.12
+```
+
+Then open:
+
+```text
+http://127.0.0.1:19080
 ```
 
 ## Verify Deployment

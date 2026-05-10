@@ -8,7 +8,7 @@ IAM_USER="${IAM_USER:-coinops-dev-terraform}"
 BUCKET_NAME="${BUCKET_NAME:-coinops-dev-tf-state}"
 REGION="${REGION:-eu-central-1}"
 LOCK_TABLE="${LOCK_TABLE:-coinops-dev-tf-locks}"
-ENV_FILE="${ENV_FILE:-.aws-bootstrap.env}"
+ENV_FILE="${ENV_FILE:-.env}"
 
 
 echo "Checking IAM user..."

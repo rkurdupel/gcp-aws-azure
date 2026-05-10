@@ -297,6 +297,10 @@ curl http://app.coin-ops.pp.ua/api/price/BTC
 
 # Open in browser
 open http://app.coin-ops.pp.ua
+
+# GCP browser access without a public load balancer
+ssh -N -L 19080:127.0.0.1:80 -J rkurdupel@34.118.107.38 rkurdupel@10.10.1.12
+open http://127.0.0.1:19080
 ```
 
 **Step 7 — Verify failover**
