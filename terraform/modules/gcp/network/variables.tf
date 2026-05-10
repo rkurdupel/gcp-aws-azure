@@ -14,3 +14,6 @@ variable "auto_create_subnetworks" {
   type = bool
 }
 
+variable "region" {
+  type = string
+}

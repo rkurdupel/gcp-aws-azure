@@ -56,7 +56,7 @@ module "firewall" {
   network_name = lookup(var.config.network, "name", "coinops-network")
   network_id   = module.network.network_id
   ports        = tonumber(lookup(var.config.ssh, "port", 22))
-  protocol     = "tcp"
+  protocol     =  lookup(var.config.ssh, "protocol", "tcp")
   cidr         = lookup(var.config.firewall, "ssh_source_ranges", ["0.0.0.0/0"])[0]
 }
 
@@ -122,7 +122,7 @@ resource "aws_lb_target_group_attachment" "app" {
 # create a dns record in cloudflare (coin-ops.pp.ua => coinops-network-812317851.eu-central-1.elb.amazonaws.com)
 resource "cloudflare_record" "app" {
   zone_id = var.cloudflare_zone_id
-  name = "app"  # app.coin-ops.pp.ua
+  name = "@"  # app.coin-ops.pp.ua
   type = "CNAME"  # if target is another domain / name - cname
   content = module.load_balancer.alb_dns_name # coin-ops.pp.ua => coinops-network-812317851.eu-central-1.elb.amazonaws.com
   ttl = 60  # dns cache time 60 seconds (user opens app.coin-ops.pp.ua => dns resolver asks cloudflare where to go it redirects to alb and saves that answer for 60 sec)

@@ -21,22 +21,21 @@ resource "aws_lb_target_group" "this" {
     protocol = "HTTP"
     vpc_id = var.vpc_id
 
- 
-#   1. You open website.
-#   2. ALB sends request to app-1.
-#   3. You click ETH.
-#   4. ALB may send next request to app-2.
-#   5. app-2 may not have the same session/cookie state yet.
-#   6. Page looks like it did not update, so you press again.
+    # without stickiness
+    #   1. You open website.
+    #   2. ALB sends request to app-1.
+    #   3. You click ETH.
+    #   4. ALB may send next request to app-2.
+    #   5. app-2 may not have the same session/cookie state yet.
+    #   6. Page looks like it did not update, so you press again.
 
-#   With stickiness:
-
-#   1. You open website.
-#   2. ALB sends you to app-1.
-#   3. ALB gives browser a cookie.
-#   4. Your next clicks also go to app-1.
-#   5. Coin/session state stays consistent.
-    
+    #. with stickiness
+    #   1. You open website.
+    #   2. ALB sends you to app-1.
+    #   3. ALB gives browser a cookie.
+    #   4. Your next clicks also go to app-1.
+    #   5. Coin/session state stays consistent.
+        
 
     stickiness {
         type            = "lb_cookie"

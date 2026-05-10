@@ -45,7 +45,7 @@ case "$cmd" in
         ansible_deploy
         ;;
     verify)
-        bash "$REPO_ROOT/scripts/verfiy_failover.sh"
+        bash "$REPO_ROOT/scripts/verify_failover.sh"
         ;;
     -h|--help|help|"")
         usage
