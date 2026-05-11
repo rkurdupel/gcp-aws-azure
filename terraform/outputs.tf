@@ -75,3 +75,7 @@ output "ssh_config" {
 output "alb_dns_name" {
   value = local.cloud == "aws" ? module.aws[0].alb_dns_name : null
 }
+
+output "rds_endpoint" {
+  value = local.cloud == "aws" ? module.aws[0].rds_endpoint : null
+}

@@ -21,3 +21,7 @@ variable "health_check_path" {
 variable "app_port" {
     type =  number
 }
+
+variable "certificate_arn" {
+  type = string
+}

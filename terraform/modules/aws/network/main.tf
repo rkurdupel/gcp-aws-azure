@@ -31,6 +31,22 @@ resource "aws_subnet" "private" {
 }
 
 
+# SUBNET FOR RDS
+resource "aws_subnet" "private_2" {
+  vpc_id = aws_vpc.this.id
+  cidr_block = var.private_subnetwork_2_cidr
+  availability_zone = var.second_availability_zone
+
+  tags = {
+    Name = "${var.network_name}-private-2"
+  }
+}
+
+resource "aws_route_table_association" "private_2" {
+  subnet_id = aws_subnet.private_2.id
+  route_table_id = aws_route_table.private.id
+}
+
 # gateway between vpc and public internet
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id

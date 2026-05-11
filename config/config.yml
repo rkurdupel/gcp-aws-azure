@@ -73,12 +73,13 @@ network:
   name: coinops-network
   subnet_name: coinops-subnet
   cidr: 10.10.0.0/16
-  subnet_cidr: 10.10.0.0/23
-  private_subnet_cidr: 10.10.1.0/24
+  subnet_cidr: 10.10.0.0/24 # Bastion public subnet
+  private_subnetwork_cidr: 10.10.10.0/24  # App and DB private subnet
   gcp_auto_create_subnetworks: false
   aws_dns_support: true
   aws_dns_hostnames: true
-  second_public_subnet_cidr: 10.10.2.0/24
+  second_public_subnet_cidr: 10.10.1.0/24 # ALB public subnet
+  private_subnetwork_2_cidr: 10.10.11.0/24  #RDS private subnet
 
 
 
@@ -95,21 +96,21 @@ instances:
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.1.11
+    private_ip: 10.10.10.11
     tags:
       - db
   app-1:
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.1.12
+    private_ip: 10.10.10.12
     tags:
       - app
   app-2:
     size: small
     image: ubuntu_2404
     public: false
-    private_ip: 10.10.1.13
+    private_ip: 10.10.10.13
     tags:
       - app
 
