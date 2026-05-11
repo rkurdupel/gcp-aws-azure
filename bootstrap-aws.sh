@@ -56,6 +56,21 @@ aws iam put-user-policy \
                 "Effect": "Allow",
                 "Action": ["ec2:*"],
                 "Resource": "*"
+            },
+            {
+                "Effect": "Allow",
+                "Action": ["elasticloadbalancing:*"],
+                "Resource": "*"
+            },
+            {
+                "Effect": "Allow",
+                "Action": ["rds:*"],
+                "Resource": "*"
+            },
+            {
+                "Effect": "Allow",
+                "Action": ["acm:*"],
+                "Resource": "*"
             }
         ]
 }'
@@ -86,12 +101,18 @@ echo "Creating new access key..."
 CREDENTIALS=$(aws iam create-access-key --user-name "${IAM_USER}")
 
 
-echo "Writing AWS env file..."
-cat > "${ENV_FILE}" << EOF
-export AWS_ACCESS_KEY_ID=$(echo "${CREDENTIALS}" | jq -r '.AccessKey.AccessKeyId')
-export AWS_SECRET_ACCESS_KEY=$(echo "${CREDENTIALS}" | jq -r '.AccessKey.SecretAccessKey')
-export AWS_DEFAULT_REGION="${REGION}"
-EOF
+NEW_KEY=$(echo "${CREDENTIALS}" | jq -r '.AccessKey.AccessKeyId')
+NEW_SECRET=$(echo "${CREDENTIALS}" | jq -r '.AccessKey.SecretAccessKey')
+
+# Update existing lines if present, otherwise append
+if grep -q "AWS_ACCESS_KEY_ID" "${ENV_FILE}" 2>/dev/null; then
+    sed -i '' "s|export AWS_ACCESS_KEY_ID=.*|export AWS_ACCESS_KEY_ID=${NEW_KEY}|" "${ENV_FILE}"
+    sed -i '' "s|export AWS_SECRET_ACCESS_KEY=.*|export AWS_SECRET_ACCESS_KEY=${NEW_SECRET}|" "${ENV_FILE}"
+else
+    echo "export AWS_ACCESS_KEY_ID=${NEW_KEY}" >> "${ENV_FILE}"
+    echo "export AWS_SECRET_ACCESS_KEY=${NEW_SECRET}" >> "${ENV_FILE}"
+    echo "export AWS_DEFAULT_REGION=${REGION}" >> "${ENV_FILE}"
+fi
 
 echo "Checking Terraform state bucket..."
 # head-bucket check if exists
@@ -144,3 +165,12 @@ else
     echo "DynamoDB lock table already exists, skipping"
 fi
 
+
+echo "Creating RDS service linked role..."
+if ! aws iam get-role --role-name AWSServiceRoleForRds 2>/dev/null; then
+    aws iam create-service-linked-role \
+        --aws-service-name rds.amazonaws.com
+    echo "RDS service linked created"
+else
+    echo "RDS services linked role already exists, skipping"
+fi

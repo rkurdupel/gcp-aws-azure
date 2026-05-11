@@ -38,15 +38,21 @@ if ! grep -qF "$SSH_INCLUDE" "$HOME/.ssh/config" 2>/dev/null; then
 fi
 
 # clear old host keys after VM recreation
-ssh-keygen -R 10.10.1.12 2>/dev/null || true
-ssh-keygen -R 10.10.1.13 2>/dev/null || true
-ssh-keygen -R 10.10.1.11 2>/dev/null || true
+ssh-keygen -R 10.10.10.11 2>/dev/null || true
+ssh-keygen -R 10.10.10.12 2>/dev/null || true
+ssh-keygen -R 10.10.10.13 2>/dev/null || true
 ssh-keygen -R 10.10.0.10 2>/dev/null || true
-
 
 echo ""
 echo "=== Done ==="
 echo "Bastion IP: $(terraform output -raw bastion_public_ip)"
+RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
+if grep -q "RDS_ENDPOINT" "${REPO_ROOT}/.env" 2>/dev/null; then
+    sed -i '' "s|export RDS_ENDPOINT=.*|export RDS_ENDPOINT=${RDS_ENDPOINT}|" "${REPO_ROOT}/.env"
+else
+    echo "export RDS_ENDPOINT=${RDS_ENDPOINT}" >> "${REPO_ROOT}/.env"
+fi
+echo "RDS endpoint: ${RDS_ENDPOINT}"
 echo ""
 echo "Test SSH:"
 echo "  ssh coinops-bastion"

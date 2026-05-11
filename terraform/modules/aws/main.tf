@@ -47,6 +47,7 @@ module "network" {
    # ALB requires at least two public subnets in different Availability Zones
   second_public_subnet_cidr = lookup(var.config.network, "second_public_subnet_cidr", "10.10.2.0/24")
   second_availability_zone = lookup(var.config.zone_map.aws, "second", "eu-central-1b")
+  private_subnetwork_2_cidr = lookup(var.config.network, "private_subnetwork_2_cidr", "10.10.3.0/24")
 }
 
 
@@ -77,7 +78,8 @@ module "vm" {
   )
 
   tags       = lookup(each.value, "tags", [])
-  subnet_id  =  contains(lookup(each.value, "tags", []), "bastion") ? module.network.subnet_id : module.network.private_subnet_id
+  subnet_id = contains(lookup(each.value, "tags", []), "bastion") ? module.network.subnet_id : module.network.private_subnet_id
+
   public_ip  = lookup(each.value, "public", false)
   private_ip = lookup(each.value, "private_ip", null)
   # if bastion - bastion , if db - db group else private group
@@ -93,6 +95,11 @@ module "vm" {
   ssh_port       = tonumber(lookup(var.config.ssh, "port", 22))
 }
 
+module "acm" {
+  source = "./acm"
+  domain_name        = var.domain_name
+  cloudflare_zone_id = var.cloudflare_zone_id
+}
 
 module "load_balancer" {
   source = "./load_balancer"
@@ -103,6 +110,20 @@ module "load_balancer" {
   security_group_id = module.firewall.lb_security_group_id
   health_check_path = "/health"
   app_port = 80
+
+  certificate_arn = module.acm.certificate_arn
+}
+
+module "rds" {
+  source = "./rds"
+  network_name = lookup(var.config.network, "name", "coinops-network")
+  vpc_id = module.network.network_id
+  private_subnet_ids = module.network.private_subnet_ids
+  app_security_group_id = module.firewall.private_security_group_id
+
+  db_name = var.db_name
+  db_user = var.db_user
+  db_password = var.db_password
 }
 
 # attach each app vm to the alb target group

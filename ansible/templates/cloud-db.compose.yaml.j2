@@ -1,20 +1,4 @@
 services:
-    postgres:
-        image: postgres:15-alpine
-        restart: unless-stopped # restart on crash/reboot
-        env_file:
-            - /opt/coinops/cloud-db/.env
-        ports:
-            - "5432:5432"
-        # data is saved on the vm and survives if container restarts / destroys
-        volumes:
-            - /var/lib/coinops/postgres:/var/lib/postgresql/data    # path on the vm : path inside the container
-        command: postgres -c ssl=off # disable ssl requirement so app services could connect without ssl
-        healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U {{postgres_user}} -d {{postgres_db}}"]
-            interval: 10s
-            timeout: 5s
-            retries: 5
     rabbitmq:
         image: rabbitmq:3-alpine
         restart: unless-stopped
