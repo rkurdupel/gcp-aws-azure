@@ -1,4 +1,4 @@
-cloud: aws
+cloud: azure
 # cloud: aws / gcp / azure
 
 name_prefix: coinops
@@ -38,18 +38,18 @@ instance_type_map:
   small:
     aws: t3.micro
     gcp: e2-micro
-    azure: Standard_F1als_v7
+    azure: Standard_F1ads_v7
 
 
   medium:
     aws: t3.small
     gcp: e2-small
-    azure: Standard_F1als_v7
+    azure: Standard_F1ads_v7
 
   large:
     aws: t3.medium
     gcp: e2-medium
-    azure: Standard_F1als_v7
+    azure: Standard_F1ads_v7
 
 
 image_map:
@@ -97,7 +97,6 @@ network:
 
 instances:
   bastion:
-    cloud: azure
     size: small
     image: ubuntu_2404
     public: true
@@ -106,7 +105,6 @@ instances:
       - bastion
 
   db:
-    cloud: gcp
     size: small
     image: ubuntu_2404
     public: false
@@ -114,7 +112,6 @@ instances:
     tags:
       - db
   app-1:
-    cloud: azure
     size: small
     image: ubuntu_2404
     public: false
