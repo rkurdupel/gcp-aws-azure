@@ -24,7 +24,6 @@ echo "Microsoft.Storage registered"
 RESOURCE_GROUP="${RESOURCE_GROUP:-coinops-dev-rg}"
 LOCATION="${LOCATION:-polandcentral}"
 STATE_RESOURCE_GROUP="${STATE_RESOURCE_GROUP:-coinops-state-rg}"
-IDENTITY_NAME="${IDENTITY_NAME:-coinops-dev-identity}"
 SP_NAME="${SP_NAME:-coinops-dev-sp}"
 
 # azure bucket
@@ -59,30 +58,6 @@ else
 fi
 
 
-echo "Checking if User Assigned Identity exists..."
-if ! az identity show \
-    --name "${IDENTITY_NAME}" \
-    --resource-group "${RESOURCE_GROUP}" &>/dev/null; then
-    echo "Creating User Assigned Identity: ${IDENTITY_NAME}"
-    az identity create \
-        --name "${IDENTITY_NAME}" \
-        --resource-group "${RESOURCE_GROUP}"
-    echo "User Assigned Identity created"
-else
-    echo "User Assigned Identity already exists, skipping"
-fi
-
-# get identity details regardless of whether it was just created or already existed
-IDENTITY_CLIENT_ID=$(az identity show \
-    --name "${IDENTITY_NAME}" \
-    --resource-group "${RESOURCE_GROUP}" \
-    --query "clientId" -o tsv)
-
-IDENTITY_ID=$(az identity show \
-    --name "${IDENTITY_NAME}" \
-    --resource-group "${RESOURCE_GROUP}" \
-    --query "id" -o tsv)
-
 
 
 # create-for-rbac - create with a role assignment instead of assigning a role with a separate block
@@ -99,7 +74,7 @@ if ! az ad sp list --display-name "${SP_NAME}" --query "[0].id" -o tsv | grep -q
         --name "${SP_NAME}" \
         --role Contributor \
         --scopes "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}" \
-        --years 99)
+        --years 2)
     echo "Service Principal created"
 else
     echo "Service Principal already exists, skipping"
@@ -217,13 +192,6 @@ if grep -q "ARM_SUBSCRIPTION_ID" "${ENV_FILE}" 2>/dev/null; then
     sed -i '' "s|export ARM_SUBSCRIPTION_ID=.*|export ARM_SUBSCRIPTION_ID=${SUBSCRIPTION_ID}|" "${ENV_FILE}"
 else
     echo "export ARM_SUBSCRIPTION_ID=${SUBSCRIPTION_ID}" >> "${ENV_FILE}"
-fi
-
-# write identity resource id to .env
-if grep -q "AZURE_IDENTITY_ID" "${ENV_FILE}" 2>/dev/null; then
-    sed -i '' "s|export AZURE_IDENTITY_ID=.*|export AZURE_IDENTITY_ID=${IDENTITY_ID}|" "${ENV_FILE}"
-else
-    echo "export AZURE_IDENTITY_ID=${IDENTITY_ID}" >> "${ENV_FILE}"
 fi
 
 echo "Done"
