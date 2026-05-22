@@ -37,26 +37,43 @@ if ! grep -qF "$SSH_INCLUDE" "$HOME/.ssh/config" 2>/dev/null; then
   echo "Added SSH include to ~/.ssh/config"
 fi
 
+BASTION_IP=$(terraform output -raw bastion_public_ip)
+
 # clear old host keys after VM recreation
-ssh-keygen -R 10.10.10.11 2>/dev/null || true
-ssh-keygen -R 10.10.10.12 2>/dev/null || true
-ssh-keygen -R 10.10.10.13 2>/dev/null || true
+ssh-keygen -R "${BASTION_IP}" 2>/dev/null || true
+ssh-keygen -R 10.10.1.11 2>/dev/null || true
+ssh-keygen -R 10.10.1.12 2>/dev/null || true
+ssh-keygen -R 10.10.1.13 2>/dev/null || true
 ssh-keygen -R 10.10.0.10 2>/dev/null || true
 
-BASTION_IP=$(terraform output -raw bastion_public_ip)
-ssh-keygen -R "${BASTION_IP}" 2>/dev/null || true
+# add new host keys - bastion first then private IPs
+ssh-keyscan -H "${BASTION_IP}" >> ~/.ssh/known_hosts 2>/dev/null || true
+ssh-keyscan -H 10.10.0.10 >> ~/.ssh/known_hosts 2>/dev/null || true
+ssh-keyscan -o ProxyJump="${BASTION_IP}" -H 10.10.1.11 >> ~/.ssh/known_hosts 2>/dev/null || true
+ssh-keyscan -o ProxyJump="${BASTION_IP}" -H 10.10.1.12 >> ~/.ssh/known_hosts 2>/dev/null || true
+ssh-keyscan -o ProxyJump="${BASTION_IP}" -H 10.10.1.13 >> ~/.ssh/known_hosts 2>/dev/null || true
+
 
 echo ""
 echo "=== Done ==="
 echo "Bastion IP: $(terraform output -raw bastion_public_ip)"
 
 
-RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
-if grep -q "RDS_ENDPOINT" "${REPO_ROOT}/.env" 2>/dev/null; then
-    sed -i '' "s|export RDS_ENDPOINT=.*|export RDS_ENDPOINT=${RDS_ENDPOINT}|" "${REPO_ROOT}/.env"
-else
-    echo "export RDS_ENDPOINT=${RDS_ENDPOINT}" >> "${REPO_ROOT}/.env"
+# get value of RDS endpoint from terraform output , if error (e.g. output doesn't exist) return ""
+RDS_ENDPOINT=$(terraform output -raw rds_endpoint 2>/dev/null || echo "")
+# -n - check if string is not empty
+if [ -n "${RDS_ENDPOINT}" ]; then
+    if grep -q "RDS_ENDPOINT" "${REPO_ROOT}/.env" 2>/dev/null; then
+    # checks if .env file already has RDS_ENDPOINT line
+    # yes → update existing line with sed
+    # no  → append new line
+        sed -i '' "s|export RDS_ENDPOINT=.*|export RDS_ENDPOINT=${RDS_ENDPOINT}|" "${REPO_ROOT}/.env"
+    else
+        echo "export RDS_ENDPOINT=${RDS_ENDPOINT}" >> "${REPO_ROOT}/.env"
+    fi
+
 fi
+
 echo "RDS endpoint: ${RDS_ENDPOINT}"
 echo ""
 echo "Test SSH:"
@@ -66,4 +83,4 @@ echo "  ssh coinops-app-1"
 echo "  ssh coinops-app-2"
 echo ""
 echo "Run Ansible:"
-echo "  ansible-playbook -i ansible/inventory.cloud ansible/cloud-provision.yml"
+echo "  ansible-playbook -i ansible/inventory.cloud ansible/cloud-k3s.yml"

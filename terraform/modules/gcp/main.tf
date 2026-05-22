@@ -35,24 +35,55 @@ module "private_ssh" {
   direction     = "INGRESS"
   source_ranges = []
   source_tags   = lookup(var.config.instances.bastion, "tags", ["bastion"])
-  target_tags   = ["app", "db"]
+  target_tags   = ["k3s-server", "k3s-worker"]
   protocol      = lookup(var.config.ssh, "protocol", "tcp")
   ports         = [tostring(lookup(var.config.ssh, "port", 22))]
 }
 
-  module "app_to_db" {
-    source = "./firewall"
 
-    name          = "${lookup(var.config, "name_prefix", "coinops")}-app-to-db"
-    network_id    = module.network.network_id
-    direction     = "INGRESS"
-    source_ranges = []
-    source_tags   = ["app"]
-    target_tags   = ["db"]
-    protocol      = "tcp"
-    ports         = ["5432", "5672", "6379"]
-  }
+# to control cluster management traffic
+module "k3s_internal" {
+  source = "./firewall"
+  name = "${lookup(var.config, "name_prefix", "coinops")}-k3s-internal"
+  network_id = module.network.network_id
+  direction = "INGRESS"
+  source_ranges = [lookup(var.config.network, "private_subnetwork_cidr", "10.10.1.0/24")]
+  source_tags = []
+  target_tags = ["k3s-server", "k3s-worker"]
+  protocol = "tcp"
+  # 6443 - k3s API Server
+  # 10250 - Kubelet API - server node talks to it for live operations with worker node
+  # 2379, 2380 - etc - database that stores all cluster state
+  ports = ["6443", "10250", "2379", "2380"]
 
+}
+
+# pod-to-pod traffic between nodes
+module "k3s_flannel" {
+  source        = "./firewall"
+  name          = "${lookup(var.config, "name_prefix", "coinops")}-k3s-flannel"
+  network_id    = module.network.network_id
+  direction     = "INGRESS"
+  source_ranges = [lookup(var.config.network, "private_subnetwork_cidr", "10.10.1.0/24")]
+  source_tags   = []
+  target_tags   = ["k3s-server", "k3s-worker"]
+  protocol      = "udp"
+  ports         = ["8472", "51820"]
+}
+
+
+#  control kubectl access from my laptop
+module "k3s_api_external" {
+  source        = "./firewall"
+  name          = "${lookup(var.config, "name_prefix", "coinops")}-k3s-api-external"
+  network_id    = module.network.network_id
+  direction     = "INGRESS"
+  source_ranges = lookup(var.config.firewall, "ssh_source_ranges", ["0.0.0.0/0"])
+  source_tags   = []
+  target_tags   = ["k3s-server"]
+  protocol      = "tcp"
+  ports         = ["6443"]
+}
 
 
 module "vm" {

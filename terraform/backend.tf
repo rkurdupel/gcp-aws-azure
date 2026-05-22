@@ -1,10 +1,10 @@
 
-# terraform {
-#   backend "gcs" {
-#     bucket = "coinops-dev-tf-state"
-#     prefix = "terraform/state/"
-#   }
-# }
+terraform {
+  backend "gcs" {
+    bucket = "coinops-dev-tf-state"
+    prefix = "terraform/state/"
+  }
+}
 
 
 # terraform {
@@ -16,14 +16,14 @@
 #   }
 # }
 
-terraform {
-  backend "azurerm" {
-    resource_group_name = "coinops-state-rg"
-    storage_account_name = "coinopsdevtfstate"
-    container_name = "tfstate"
-    key = "terraform/azure/state/default.tfstate"
-  }
-}
+# terraform {
+#   backend "azurerm" {
+#     resource_group_name = "coinops-state-rg"
+#     storage_account_name = "coinopsdevtfstate"
+#     container_name = "tfstate"
+#     key = "terraform/azure/state/default.tfstate"
+#   }
+# }
 
 #   terraform init -reconfigure
 # DESTROY BEFORE CHANGING BACKGROUND

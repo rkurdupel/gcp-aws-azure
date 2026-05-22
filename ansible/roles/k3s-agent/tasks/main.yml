@@ -1,0 +1,21 @@
+- name: download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+
+- name: get k3s server node token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+  delegate_to: "{{groups['k3s_server'][0]}}" # delegate to - run the slurp task on the server node to get token
+
+
+
+- name: install k3s worker 
+  ansible.builtin.command:
+    cmd: /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_EXEC: "agent --node-name {{ inventory_hostname | replace('coinops-', '') }}"
+    K3S_URL: "https://{{hostvars[groups['k3s_server'][0]]['ansible_host']}}:6443" # tell worker where the server is located
+    K3S_TOKEN: "{{k3s_token_raw.content | b64decode | trim}}" # a proof from worker to server that you are allowed to join

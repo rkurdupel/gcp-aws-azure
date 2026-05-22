@@ -1,4 +1,4 @@
-cloud: azure
+cloud: gcp
 # cloud: aws / gcp / azure
 
 name_prefix: coinops
@@ -104,27 +104,27 @@ instances:
     tags:
       - bastion
 
-  db:
-    size: small
+  k3s-server:
+    size: medium
     image: ubuntu_2404
     public: false
     private_ip: 10.10.1.11
     tags:
-      - db
-  app-1:
-    size: small
+      - k3s-server
+  k3s-worker-1:
+    size: medium
     image: ubuntu_2404
     public: false
     private_ip: 10.10.1.12
     tags:
-      - app
-  app-2:
-    size: small
+      - k3s-worker
+  k3s-worker-2:
+    size: medium
     image: ubuntu_2404
     public: false
     private_ip: 10.10.1.13
     tags:
-      - app
+      - k3s-worker
 
 
 firewall:

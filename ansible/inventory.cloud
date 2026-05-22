@@ -1,17 +1,14 @@
 [bastion]
-coinops-app-1 ansible_host= ansible_user=rkurdupel
-coinops-app-2 ansible_host= ansible_user=rkurdupel
-coinops-bastion ansible_host=35.159.115.25 ansible_user=rkurdupel
-coinops-db ansible_host= ansible_user=rkurdupel
+coinops-bastion ansible_host=34.118.31.47 ansible_user=rkurdupel
 
-[db]
-coinops-db ansible_host=10.10.1.11 ansible_user=rkurdupel ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=rkurdupel@35.159.115.25'
+[k3s_server]
+coinops-k3s-server ansible_host=10.10.1.11 ansible_user=rkurdupel ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=rkurdupel@34.118.31.47'
 
-[app]
-coinops-app-1 ansible_host=10.10.1.12 ansible_user=rkurdupel ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=rkurdupel@35.159.115.25'
-coinops-app-2 ansible_host=10.10.1.13 ansible_user=rkurdupel ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=rkurdupel@35.159.115.25'
+[k3s_worker]
+coinops-k3s-worker-1 ansible_host=10.10.1.12 ansible_user=rkurdupel ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=rkurdupel@34.118.31.47'
+coinops-k3s-worker-2 ansible_host=10.10.1.13 ansible_user=rkurdupel ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=rkurdupel@34.118.31.47'
 
 [cloud:children]
 bastion
-db
-app
+k3s_server
+k3s_worker
