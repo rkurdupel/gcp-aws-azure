@@ -104,27 +104,27 @@ instances:
     tags:
       - bastion
 
-  k3s-server:
+  k3s-node-1:
     size: medium
     image: ubuntu_2404
     public: false
     private_ip: 10.10.1.11
     tags:
-      - k3s-server
-  k3s-worker-1:
+      - k3s-node
+  k3s-node-2:
     size: medium
     image: ubuntu_2404
     public: false
     private_ip: 10.10.1.12
     tags:
-      - k3s-worker
-  k3s-worker-2:
+      - k3s-node
+  k3s-node-3:
     size: medium
     image: ubuntu_2404
     public: false
     private_ip: 10.10.1.13
     tags:
-      - k3s-worker
+      - k3s-node
 
 
 firewall:

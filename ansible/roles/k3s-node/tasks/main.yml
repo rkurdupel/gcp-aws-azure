@@ -1,0 +1,91 @@
+- name: download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+
+- name: install k3s on first node
+  ansible.builtin.command:
+    cmd: /tmp/k3s-install.sh
+    creates: /etc/systemd/system/k3s.service # run install k3s on first node task only if k3s.service does not exist
+  # groups from inventory
+  # only create on first node to share token with other
+   # environment task will also be skipped if it does not fulfill when condition, when - skips whole block
+  when: inventory_hostname == groups['k3s_node'][0]  
+  environment:
+    INSTALL_K3S_EXEC: >-
+      server
+      --node-name {{inventory_hostname | replace('coinops-', '')}}
+      --cluster-init  
+      --tls-san 127.0.0.1
+  # cluster-init start a HA (high availability) wiht embedded etcd cluster group rather a single node server
+  # etcd is a distributed database that holds cluster state: what runs where, who has access, what is configured
+  # tls-san  - tlks cert validation
+
+- name: read cluster token from first node
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+  delegate_to: "{{groups['k3s_node'][0]}}"  # # delegate to - run the slurp task on the server node to get token
+  when: inventory_hostname != groups['k3s_node'][0] # rubn only on nodes 2, 3
+
+- name: install k3s on joining nodes  # (2, 3)
+  ansible.builtin.command:
+    cmd: /tmp/k3s-install.sh
+    creates: /etc/systemd/system/k3s.service
+  when: inventory_hostname != groups['k3s_node'][0]
+  # server - set connection to the first node so to have one cluster
+  #  join the existing cluster at node-1's API instead of starting a new one
+  environment:
+    INSTALL_K3S_EXEC: >- 
+      server
+      --server https://{{hostvars[groups['k3s_node'][0]]['ansible_host']}}:6443
+      --node-name {{ inventory_hostname | replace('coinops-', '')}}
+      --tls-san 127.0.0.1
+    K3S_TOKEN: "{{k3s_token_raw.content | b64decode | trim}}" # shared cluster token used to authenticate node-2, 3 to node-1's API
+
+
+# config of first only - because configs of 2, 3 are indentical to 1
+- name: fetch kubeconfig from first node to local machine
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: ~/.kube/k3s-coinops-raw.yaml
+    flat: true  # saves directly to the path instead of creating nested folders.
+  when: inventory_hostname == groups['k3s_node'][0]
+
+- name: download helm install script
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    dest: /tmp/get-helm-3.sh
+    mode: '0755'
+  when: inventory_hostname == groups['k3s_node'][0]
+
+- name: install helm
+  ansible.builtin.command:
+    cmd: /tmp/get-helm-3.sh
+    creates: /usr/local/bin/helm
+  when: inventory_hostname == groups['k3s_node'][0]
+
+- name: add headlamp helm repository
+  ansible.builtin.command:
+    cmd: helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  when: inventory_hostname == groups['k3s_node'][0]
+
+# update helm list of repos to check whether anything was added
+# = # fetch the latest chart index from every registered helm repo
+- name: update helm repositories
+  ansible.builtin.command:
+    cmd: helm repo update
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  when: inventory_hostname == groups['k3s_node'][0]
+
+# install headlamp into the cluster
+- name: install headlamp
+  ansible.builtin.command:
+    cmd: helm upgrade --install headlamp headlamp/headlamp
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  when: inventory_hostname == groups['k3s_node'][0]

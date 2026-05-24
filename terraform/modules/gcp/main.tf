@@ -35,7 +35,7 @@ module "private_ssh" {
   direction     = "INGRESS"
   source_ranges = []
   source_tags   = lookup(var.config.instances.bastion, "tags", ["bastion"])
-  target_tags   = ["k3s-server", "k3s-worker"]
+  target_tags   = ["k3s-node"]
   protocol      = lookup(var.config.ssh, "protocol", "tcp")
   ports         = [tostring(lookup(var.config.ssh, "port", 22))]
 }
@@ -49,7 +49,7 @@ module "k3s_internal" {
   direction = "INGRESS"
   source_ranges = [lookup(var.config.network, "private_subnetwork_cidr", "10.10.1.0/24")]
   source_tags = []
-  target_tags = ["k3s-server", "k3s-worker"]
+  target_tags = ["k3s-node"]
   protocol = "tcp"
   # 6443 - k3s API Server
   # 10250 - Kubelet API - server node talks to it for live operations with worker node
@@ -59,6 +59,7 @@ module "k3s_internal" {
 }
 
 # pod-to-pod traffic between nodes
+# A pod is one running instance of your app in Kubernetes. It wraps one container (sometimes a few), has its own IP, and is disposable kill or spin up a new one anytime
 module "k3s_flannel" {
   source        = "./firewall"
   name          = "${lookup(var.config, "name_prefix", "coinops")}-k3s-flannel"
@@ -66,7 +67,7 @@ module "k3s_flannel" {
   direction     = "INGRESS"
   source_ranges = [lookup(var.config.network, "private_subnetwork_cidr", "10.10.1.0/24")]
   source_tags   = []
-  target_tags   = ["k3s-server", "k3s-worker"]
+  target_tags   = ["k3s-node"]
   protocol      = "udp"
   ports         = ["8472", "51820"]
 }
@@ -80,7 +81,7 @@ module "k3s_api_external" {
   direction     = "INGRESS"
   source_ranges = lookup(var.config.firewall, "ssh_source_ranges", ["0.0.0.0/0"])
   source_tags   = []
-  target_tags   = ["k3s-server"]
+  target_tags   = ["k3s-node"]
   protocol      = "tcp"
   ports         = ["6443"]
 }

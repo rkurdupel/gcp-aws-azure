@@ -24,20 +24,14 @@ output "ansible_inventory" {
       "coinops-${name} ansible_host=${vm.public_ip} ansible_user=${local.config.ssh.user}"
       if vm.public_ip != null
     ],
-    ["", "[k3s_server]"],
+    ["", "[k3s_node]"],
     [for name, vm in local.vm_ips :
       "coinops-${name} ansible_host=${vm.private_ip} ansible_user=${local.config.ssh.user} ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=${local.config.ssh.user}@${local.vm_ips["bastion"].public_ip}'"
-      if startswith(name, "k3s-server")
+      if startswith(name, "k3s-node")
     ],
-    ["", "[k3s_worker]"],
-    [for name, vm in local.vm_ips :
-      "coinops-${name} ansible_host=${vm.private_ip} ansible_user=${local.config.ssh.user} ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=${local.config.ssh.user}@${local.vm_ips["bastion"].public_ip}'"
-      if startswith(name, "k3s-worker")
-    ],
-    ["", "[cloud:children]", "bastion", "k3s_server", "k3s_worker"]
+    ["", "[cloud:children]", "bastion", "k3s_node"]
   ))
 }
-
 output "ssh_config" {
   value = join("\n", concat(
     [

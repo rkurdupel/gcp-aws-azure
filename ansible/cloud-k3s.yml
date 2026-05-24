@@ -5,14 +5,10 @@
   roles:
     - common
 
-- name: install k3s server
-  hosts: k3s_server # install on k3s_server (vm) group only
+- name: install k3s node
+  hosts: k3s_node # # install on k3s_node (vm) group only
   become: true
   roles:
-    - k3s-server
+    - k3s-node
 
-- name: install k3s worker
-  hosts: k3s_worker
-  become: true
-  roles:
-    - k3s-agent
+
