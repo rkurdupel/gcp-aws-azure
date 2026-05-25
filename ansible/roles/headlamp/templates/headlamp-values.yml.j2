@@ -1,0 +1,14 @@
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: {{ headlamp_cluster_issuer }}
+  hosts:
+    - host: {{ headlamp_host }}
+      paths:
+        - path: /
+          type: Prefix
+  tls:
+    - hosts:
+        - {{ headlamp_host }}
+      secretName: {{ headlamp_tls_secret_name }}

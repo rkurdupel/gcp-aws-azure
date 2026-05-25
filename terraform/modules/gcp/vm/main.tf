@@ -28,14 +28,4 @@ resource "google_compute_instance" "this" {
   metadata = {
     ssh-keys = "${var.ssh_user}:${var.ssh_public_key}"
   }
-
-  # configure 9922 port
-  metadata_startup_script = <<-EOF
-  #!/bin/bash
-  sed -i 's/^#\\?Port .*/Port ${var.ssh_port}/' /etc/ssh/sshd_config
-  grep -q '^Port ${var.ssh_port}$' /etc/ssh/sshd_config || echo 'Port ${var.ssh_port}' >> /etc/ssh/sshd_config
-  systemctl restart ssh || systemctl restart sshd
-  EOF
-
-
 }

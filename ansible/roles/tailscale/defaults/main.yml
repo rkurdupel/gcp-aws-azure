@@ -1,0 +1,23 @@
+tailscale_auth_key: "{{lookup('env', 'TAILSCALE_AUTH_KEY')}}"
+
+# name of the current host
+# inventory_hostname comes from ansible inventory file (coinops-bastion, coinops-k3s-node-1)
+tailscale_hostname: "{{inventory_hostname}}"
+# whether the machine acts as a subnet router - a geteway that lets other tailnet devices reach a non-Tailscale network behind it
+# only bastion will have :true , because it is the only gateway to reach other vms
+tailscale_advertise_routes: false 
+
+# which cidr ranges to advertise if advertise_routes: true
+tailscale_routes:
+  - 10.10.0.0/16
+
+# allow to use the shortcuts that other tailscale machines are advertising
+# some vm is advertising 10.10.0.0/16 ( a bridge ) , so if accept_routes: true - you can ssh 10.10.1.11 otherwise only from tailscale ip (100.x.x.x)
+tailscale_accept_routes: false
+
+# the label the machine gets in the tailnet, controlling what acl rules (on tailscale website) apply to it
+tailscale_tags:
+  - tag:coinops
+
+# replace ssh keys with tailscale-managed auth (lets you `tailscale ssh <node>` without ssh keys)
+tailscale_ssh: true

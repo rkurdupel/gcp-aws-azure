@@ -1,0 +1,5 @@
+- name: install cert-manager and ClusterIssuers on k3s
+  hosts: "{{groups['k3s_node'][0]}}"  # get first node from k3s cluster no hardcoding
+  become: true
+  roles: 
+    - cert-manager

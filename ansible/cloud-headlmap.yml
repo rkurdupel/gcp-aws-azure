@@ -1,0 +1,7 @@
+- name: install headlamp ingress on k3s
+  hosts: "{{groups['k3s_node'][0]}}" # get first node from k3s cluster no hardcoding
+  become: true
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  roles:
+    - headlamp

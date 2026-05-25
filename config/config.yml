@@ -97,7 +97,7 @@ network:
 
 instances:
   bastion:
-    size: small
+    size: large
     image: ubuntu_2404
     public: true
     private_ip: 10.10.0.10
@@ -105,21 +105,21 @@ instances:
       - bastion
 
   k3s-node-1:
-    size: medium
+    size: large
     image: ubuntu_2404
-    public: false
+    public: true
     private_ip: 10.10.1.11
     tags:
       - k3s-node
   k3s-node-2:
-    size: medium
+    size: large
     image: ubuntu_2404
     public: false
     private_ip: 10.10.1.12
     tags:
       - k3s-node
   k3s-node-3:
-    size: medium
+    size: large
     image: ubuntu_2404
     public: false
     private_ip: 10.10.1.13

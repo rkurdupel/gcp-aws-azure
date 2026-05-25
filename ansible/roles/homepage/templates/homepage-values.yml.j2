@@ -1,0 +1,29 @@
+# Ingress: route traffic from {{homepage_host}} to the homepage service
+ingress:
+  main:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+        cert-manager.io/cluster-issuer: {{homepage_cluster_issuer}}
+    hosts:
+      - host: {{homepage_host}}
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts:
+          - {{homepage_host}}
+        secretName: {{homepage_tls_secret_name}}
+# when error (Host validation failed. See logs for more details.) while entering home.coin-ops.pp.ua
+env:
+  HOMEPAGE_ALLOWED_HOSTS: {{homepage_host}}
+config:
+    bookmarks:
+        - Media:
+            - Youtube:
+                - abbr: YT
+                  href: {{homepage_youtube_url}}
+    services: []
+    widgets: []
+    settings:
+        title: CoinOps

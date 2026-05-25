@@ -1,0 +1,8 @@
+- name: install tailscale on all cloud nodes
+  hosts: cloud
+  become: true
+  roles:
+    - tailscale
+  vars:
+    tailscale_advertise_routes: "{{'bastion' in group_names}}"  # if the host in bastion group set true
+    tailscale_accept_routes: false

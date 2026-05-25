@@ -1,0 +1,17 @@
+# Helm chart settings
+headlamp_namespace: default
+headlamp_release_name: headlamp
+headlamp_chart_repo_name: headlamp
+headlamp_chart_repo_url: https://kubernetes-sigs.github.io/headlamp/
+headlamp_chart_name: headlamp
+headlamp_chart_version: 0.39.0
+
+# Ingress
+headlamp_host: headlamp.coin-ops.pp.ua
+
+# TLS
+headlamp_tls_secret_name: headlamp-tls
+headlamp_cluster_issuer: letsencrypt-prod
+
+# Helm values file location
+headlamp_values_file: /tmp/headlamp-values.yaml

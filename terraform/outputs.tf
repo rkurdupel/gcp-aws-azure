@@ -22,7 +22,7 @@ output "ansible_inventory" {
     ["[bastion]"],
     [for name, vm in local.vm_ips :
       "coinops-${name} ansible_host=${vm.public_ip} ansible_user=${local.config.ssh.user}"
-      if vm.public_ip != null
+      if vm.public_ip != null && name == "bastion"
     ],
     ["", "[k3s_node]"],
     [for name, vm in local.vm_ips :

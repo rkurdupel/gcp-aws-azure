@@ -1,0 +1,71 @@
+- name: check tailscale auth key is set
+  ansible.builtin.assert:
+    that:
+      - tailscale_auth_key | length > 0
+    fail_msg: |
+      TAILSCALE_AUTH_KEY env var is not set.
+      Run: export TAILSCALE_AUTH_KEY=tskey-auth-xxxxx
+  
+- name: add tailscale apt signing key
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: '0644'
+
+- name: add tailscale apt repository
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list
+    dest: /etc/apt/sources.list.d/tailscale.list
+    mode: '0644'
+
+
+- name: install tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present  # install if not present
+    update_cache: true  # apt update
+
+# d - daemon - 24/7 in the background
+- name: enable and start tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: true # auto boot
+    state: started  # start if not started
+
+- name: check tailscale status
+  ansible.builtin.command: tailscale status --json
+  register: tailscale_status_raw
+  changed_when: false # tell ansible this never changes the system during the playing of the playbook
+  failed_when: false  # if command exists non-zero don't fail the playbook
+
+- name: parse tailscale backend state
+  ansible.builtin.set_fact:
+    tailscale_backend_state: "{{ (tailscale_status_raw.stdout | from_json).BackendState | default('NoState') }}"
+  when: tailscale_status_raw.rc == 0  # only run this task if previous succeeded (exit code 0)
+
+- name: build tailscale up command
+  ansible.builtin.set_fact:
+    tailscale_up_args: >-
+      tailscale up
+      --auth-key={{tailscale_auth_key}}
+      --hostname={{tailscale_hostname}}
+      --advertise-tags={{tailscale_tags | join(',')}}
+      {% if tailscale_advertise_routes %}--advertise-routes={{tailscale_routes | join(',')}}{% endif %}
+      {% if tailscale_accept_routes %}--accept-routes{% endif %}
+      {% if tailscale_ssh %}--ssh{% endif %}
+
+# run tailscale build command 
+- name: join tailnet
+  ansible.builtin.command: "{{tailscale_up_args}}"
+  when: tailscale_backend_state | default('NoState') != 'Running' # run this task when the tailscale backend state is anything other than running
+  changed_when: true  # tell ansible that it changed the system
+
+- name: get tailscale ip
+  ansible.builtin.command: tailscale ip -4  # -4 - ipv4
+  register: tailscale_ip
+  changed_when: false
+
+- name: show tailscale ip
+  # debug - print to terminal
+  ansible.builtin.debug:
+    msg: "{{inventory_hostname}} tailscale IP: {{tailscale_ip.stdout}}"

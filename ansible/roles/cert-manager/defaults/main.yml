@@ -1,0 +1,26 @@
+# Chart settings
+cert_manager_namespace: cert-manager
+cert_manager_release_name: cert-manager
+cert_manager_chart_repo_name: jetstack
+cert_manager_chart_repo_url: https://charts.jetstack.io
+cert_manager_chart_name: cert-manager
+cert_manager_chart_version: v1.16.2
+
+# Email used by letsencrypt for cert expiry notices
+cert_manager_acme_email: romakrd0212@gmail.com
+
+# Cloudflare API token
+cert_manager_cloudflare_api_token: "{{ lookup('env', 'TF_VAR_cloudflare_api_token') }}" # kubectl get secrets -n cert-manager
+
+# Names for the two ClusterIssuers
+cert_manager_issuer_staging_name: letsencrypt-staging
+cert_manager_issuer_prod_name: letsencrypt-prod
+
+# letsencrypt ACME (Automatic Certificate Management Environment) endpoints
+cert_manager_acme_url_staging: https://acme-staging-v02.api.letsencrypt.org/directory
+cert_manager_acme_url_prod: https://acme-v02.api.letsencrypt.org/directory
+
+# Where temporary manifests are rendered before kubectl apply
+cert_manager_manifest_dir: /tmp/cert-manager
+
+# two cluster issuers letsencrypt-prod/staging where in manifest they read the cloudflare secret

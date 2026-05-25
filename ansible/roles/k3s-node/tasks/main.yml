@@ -18,9 +18,10 @@
       --node-name {{inventory_hostname | replace('coinops-', '')}}
       --cluster-init  
       --tls-san 127.0.0.1
+      --tls-san {{inventory_hostname}} 
   # cluster-init start a HA (high availability) wiht embedded etcd cluster group rather a single node server
   # etcd is a distributed database that holds cluster state: what runs where, who has access, what is configured
-  # tls-san  - tlks cert validation
+  # tls-san  - tls cert validation
 
 - name: read cluster token from first node
   ansible.builtin.slurp:
@@ -42,6 +43,7 @@
       --server https://{{hostvars[groups['k3s_node'][0]]['ansible_host']}}:6443
       --node-name {{ inventory_hostname | replace('coinops-', '')}}
       --tls-san 127.0.0.1
+      --tls-san {{inventory_hostname}}
     K3S_TOKEN: "{{k3s_token_raw.content | b64decode | trim}}" # shared cluster token used to authenticate node-2, 3 to node-1's API
 
 
@@ -49,8 +51,18 @@
 - name: fetch kubeconfig from first node to local machine
   ansible.builtin.fetch:
     src: /etc/rancher/k3s/k3s.yaml
-    dest: ~/.kube/k3s-coinops-raw.yaml
+    dest: ~/.kube/k3s-coinops.yaml
     flat: true  # saves directly to the path instead of creating nested folders.
+  become: true
+  when: inventory_hostname == groups['k3s_node'][0]
+
+- name: rewrite server address in kubeconfig
+  ansible.builtin.replace:
+    path: ~/.kube/k3s-coinops.yaml
+    regexp: 'https://127\.0\.0\.1:6443'
+    replace: "https://{{ groups['k3s_node'][0] }}:6443"
+  delegate_to: localhost
+  become: false
   when: inventory_hostname == groups['k3s_node'][0]
 
 - name: download helm install script

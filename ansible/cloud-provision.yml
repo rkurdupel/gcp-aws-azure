@@ -18,21 +18,4 @@
   become: true
   roles:
     - common
-    - docker
 
-
-- name: provision db VM
-  hosts: db
-  become: true
-  tasks:
-    - name: create rabbitmq data directory
-      ansible.builtin.file:
-        path: /var/lib/coinops/rabbitmq
-        state: directory
-        mode: '0755'
-
-    - name: create redis data directory
-      ansible.builtin.file:
-        path: /var/lib/coinops/redis
-        state: directory
-        mode: '0755'

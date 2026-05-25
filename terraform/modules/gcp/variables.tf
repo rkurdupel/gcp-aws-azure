@@ -10,3 +10,7 @@ variable "instances" {
   type    = any
   default = null
 }
+
+variable "cloudflare_zone_id" {
+  type = string
+}

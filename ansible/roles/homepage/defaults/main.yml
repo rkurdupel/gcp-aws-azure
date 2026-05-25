@@ -1,0 +1,18 @@
+homepage_namespace: default #  kubectl get pods -n default
+homepage_release_name: homepage
+homepage_chart_repo_name: jameswynn
+homepage_chart_repo_url: https://jameswynn.github.io/helm-charts
+homepage_chart_name: homepage
+homepage_chart_version: 2.0.2
+
+#ingress
+homepage_host: home.coin-ops.pp.ua
+homepage_tls_secret_name: homepage-tls  # box where https cert from letsencrypt is saved
+homepage_cluster_issuer: letsencrypt-prod # from existing clusterissuer  (kubectl get clusterissuers)
+ 
+# Helm values file location (rendered from template)
+homepage_values_file: /tmp/homepage-values.yml
+
+homepage_youtube_url: https://www.youtube.com/
+homepage_replicas: 1
+

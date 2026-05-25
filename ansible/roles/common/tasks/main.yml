@@ -24,3 +24,22 @@
     create_home: true # creates /home/rkurdupel (on vm)
     groups: sudo  # add user to sudo group to be able to use sudo (builtin linux group)
     append: true  # don't remove user from existing groups (docker, ubuntu, adm, etc)
+
+- name: set rp_filter to loose mode (required for Tailscale subnet routing)
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "2"
+    state: present
+    sysctl_set: true
+    reload: true
+  loop:
+    - net.ipv4.conf.all.rp_filter
+    - net.ipv4.conf.default.rp_filter
+
+- name: enable IP forwarding (required for Tailscale subnet router)
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    sysctl_set: true
+    reload: true

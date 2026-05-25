@@ -72,20 +72,49 @@ module "k3s_flannel" {
   ports         = ["8472", "51820"]
 }
 
-
-#  control kubectl access from my laptop
-module "k3s_api_external" {
+# allow public internet to reach k3s-node-1 on HTTP/HTTPS (Traefik)
+module "k3s_public_ingress" {
   source        = "./firewall"
-  name          = "${lookup(var.config, "name_prefix", "coinops")}-k3s-api-external"
+  name          = "${lookup(var.config, "name_prefix", "coinops")}-k3s-public-ingress"
   network_id    = module.network.network_id
   direction     = "INGRESS"
-  source_ranges = lookup(var.config.firewall, "ssh_source_ranges", ["0.0.0.0/0"])
+  source_ranges = ["0.0.0.0/0"]
   source_tags   = []
   target_tags   = ["k3s-node"]
   protocol      = "tcp"
-  ports         = ["6443"]
+  ports         = ["80", "443"]
 }
 
+# allow bastion (Tailscale subnet router) to reach k3s on HTTP/HTTPS
+module "k3s_from_bastion" {
+  source        = "./firewall"
+  name          = "${lookup(var.config, "name_prefix", "coinops")}-k3s-from-bastion"
+  network_id    = module.network.network_id
+  direction     = "INGRESS"
+  source_ranges = []
+  source_tags   = lookup(var.config.instances.bastion, "tags", ["bastion"])
+  target_tags   = ["k3s-node"]
+  protocol      = "tcp"
+  ports         = ["80", "443"]
+}
+
+resource "cloudflare_record" "homepage" {
+  zone_id = var.cloudflare_zone_id
+  name = "home" # home.coin-ops.pp.ua
+  type = "A"  # A - IPv4 (k3s-node-1 public ip)
+  content = module.vm["k3s-node-1"].public_ip # its what the DNS record points to when browser asks for ip (provides ip of node-1)
+  ttl = 60
+  proxied = false
+}
+
+resource "cloudflare_record" "headlamp" {
+  zone_id = var.cloudflare_zone_id
+  name    = "headlamp"
+  type    = "A"
+  content = module.vm["k3s-node-1"].private_ip
+  ttl     = 60
+  proxied = false
+}
 
 module "vm" {
   source   = "./vm"
