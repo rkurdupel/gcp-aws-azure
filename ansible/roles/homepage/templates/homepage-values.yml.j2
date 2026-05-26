@@ -1,8 +1,8 @@
-# Ingress: route traffic from {{homepage_host}} to the homepage service
+# Ingress is a rule that Traefik reads (rule: route home.coin-ops.pp.ua → homepage Service)
 ingress:
   main:
     enabled: true
-    ingressClassName: traefik
+    ingressClassName: traefik # Traefik is a service that runs 24/7 that forwards traffic as a reverse proxy. if request is sent to homepage domain then DNS converts it, by IP reaches node, and Traefik inside nodes returns service (installed homepage app)
     annotations:
         cert-manager.io/cluster-issuer: {{homepage_cluster_issuer}}
     hosts:

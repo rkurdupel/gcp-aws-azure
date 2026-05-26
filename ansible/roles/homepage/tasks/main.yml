@@ -1,19 +1,7 @@
 - name: ensure helm repo is added
-  ansible.builtin.command:
-    cmd: helm repo add {{homepage_chart_repo_name}} {{homepage_chart_repo_url}}
-  register: helm_repo_add
-  changed_when: "'has been added' in helm_repo_add.stdout"
-  failed_when: 
-    - helm_repo_add.rc != 0 # rc - return code
-    - "'already exists' not in helm_repo_add.stderr"  # stderr -  standard error - потік помилок
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-
-- name: update helm repos
-  ansible.builtin.command: helm repo update
-  changed_when: false
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  kubernetes.core.helm_repository:
+    name: "{{ homepage_chart_repo_name }}"
+    repo_url: "{{ homepage_chart_repo_url }}"
 
 - name: render homepage helm values
   ansible.builtin.template:
@@ -21,20 +9,17 @@
     dest: "{{ homepage_values_file }}"
     mode: "0600"
 
-- name: install or upgrade homepage chart
-  ansible.builtin.command: >-
-    helm upgrade --install {{homepage_release_name}}
-    {{homepage_chart_repo_name}}/{{homepage_chart_name}}
-    --namespace {{homepage_namespace}}
-    --create-namespace
-    --version {{homepage_chart_version}}
-    --values {{homepage_values_file}}
-  register: helm_install
-  changed_when: >-
-    'STATUS: deployed' in helm_install.stdout or
-    'STATUS: pending-upgrade' in helm_install.stdout or
-    'STATUS: pending-install' in helm_install.stdout
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-
   
+- name: install or upgrade homepage chart
+  kubernetes.core.helm:
+    name: "{{ homepage_release_name }}"
+    chart_ref: "{{ homepage_chart_repo_name }}/{{ homepage_chart_name }}"
+    chart_version: "{{ homepage_chart_version }}"
+    release_namespace: "{{ homepage_namespace }}"
+    create_namespace: true
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    update_repo_cache: true
+    # rendered output of jinja template after (render homepage helm with values), recreates each time in /tmp/ folder
+    values_files:
+      - "{{ homepage_values_file }}"
+    wait: true

@@ -78,26 +78,3 @@
     creates: /usr/local/bin/helm
   when: inventory_hostname == groups['k3s_node'][0]
 
-- name: add headlamp helm repository
-  ansible.builtin.command:
-    cmd: helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  when: inventory_hostname == groups['k3s_node'][0]
-
-# update helm list of repos to check whether anything was added
-# = # fetch the latest chart index from every registered helm repo
-- name: update helm repositories
-  ansible.builtin.command:
-    cmd: helm repo update
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  when: inventory_hostname == groups['k3s_node'][0]
-
-# install headlamp into the cluster
-- name: install headlamp
-  ansible.builtin.command:
-    cmd: helm upgrade --install headlamp headlamp/headlamp
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  when: inventory_hostname == groups['k3s_node'][0]

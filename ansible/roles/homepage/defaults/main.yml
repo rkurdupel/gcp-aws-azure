@@ -1,4 +1,4 @@
-homepage_namespace: default #  kubectl get pods -n default
+homepage_namespace: homepage #  kubectl get pods -n default
 homepage_release_name: homepage
 homepage_chart_repo_name: jameswynn
 homepage_chart_repo_url: https://jameswynn.github.io/helm-charts

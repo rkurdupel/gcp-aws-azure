@@ -1,5 +1,5 @@
 # Helm chart settings
-headlamp_namespace: default
+headlamp_namespace: headlamp
 headlamp_release_name: headlamp
 headlamp_chart_repo_name: headlamp
 headlamp_chart_repo_url: https://kubernetes-sigs.github.io/headlamp/

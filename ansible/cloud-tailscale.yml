@@ -5,4 +5,3 @@
     - tailscale
   vars:
     tailscale_advertise_routes: "{{'bastion' in group_names}}"  # if the host in bastion group set true
-    tailscale_accept_routes: false

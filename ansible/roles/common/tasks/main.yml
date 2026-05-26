@@ -13,6 +13,15 @@
       - python3-pip
     state: present
 
+
+- name: install python kubernetes library for ansible modules
+  ansible.builtin.pip:
+    name:
+      - kubernetes
+      - PyYAML
+    state: present
+    break_system_packages: true # force ubuntu 24.04 to install system-wide
+
 - name: Set timezone to UTC
   community.general.timezone:
     name: UTC

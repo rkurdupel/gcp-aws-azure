@@ -11,8 +11,11 @@ tailscale_advertise_routes: false
 tailscale_routes:
   - 10.10.0.0/16
 
-# allow to use the shortcuts that other tailscale machines are advertising
-# some vm is advertising 10.10.0.0/16 ( a bridge ) , so if accept_routes: true - you can ssh 10.10.1.11 otherwise only from tailscale ip (100.x.x.x)
+# shorcut - range of ips that is advertised in (tailscale_advertise_routes) (bastion)
+# without advertise routes you cannot reach private ip like 10.10.1.11
+# with shortcut request to 10.10.1.11 is seen as advertised by bastion in its range , request is sent to bastion's tailnet ip and bastion forwars it into gcp
+# tailscale_accept_routes: false - so not to use tailnet traffic vm to vm but use gcp internal network vpc
+# accept routes is turned on when setting up connection to mac to reach private gcp ips from outside
 tailscale_accept_routes: false
 
 # the label the machine gets in the tailnet, controlling what acl rules (on tailscale website) apply to it

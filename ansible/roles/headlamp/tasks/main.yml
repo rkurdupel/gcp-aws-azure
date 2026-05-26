@@ -1,15 +1,8 @@
+# add a helm repo (headlamp) to the local helm config , if addedd - skip
 - name: ensure helm repo is added
-  ansible.builtin.command:
-    cmd: helm repo add {{ headlamp_chart_repo_name }} {{ headlamp_chart_repo_url }}
-  register: helm_repo_add
-  changed_when: "'has been added' in helm_repo_add.stdout"
-  failed_when:
-    - helm_repo_add.rc != 0
-    - "'already exists' not in helm_repo_add.stderr"
-
-- name: update helm repos
-  ansible.builtin.command: helm repo update
-  changed_when: false
+  kubernetes.core.helm_repository:
+    name: "{{ headlamp_chart_repo_name }}"
+    repo_url: "{{ headlamp_chart_repo_url }}"
 
 - name: render headlamp helm values
   ansible.builtin.template:
@@ -18,16 +11,14 @@
     mode: "0600"
 
 - name: install or upgrade headlamp chart
-  ansible.builtin.command: >-
-    helm upgrade --install {{ headlamp_release_name }}
-    {{ headlamp_chart_repo_name }}/{{ headlamp_chart_name }}
-    --namespace {{ headlamp_namespace }}
-    --create-namespace
-    --version {{ headlamp_chart_version }}
-    --values {{ headlamp_values_file }}
-  register: helm_install
-  changed_when: >-
-    'STATUS: deployed' in helm_install.stdout or
-    'STATUS: pending-upgrade' in helm_install.stdout or
-    'STATUS: pending-install' in helm_install.stdout
-
+  kubernetes.core.helm:
+    name: "{{ headlamp_release_name }}"
+    chart_ref: "{{ headlamp_chart_repo_name }}/{{ headlamp_chart_name }}"
+    chart_version: "{{ headlamp_chart_version }}"
+    release_namespace: "{{ headlamp_namespace }}"
+    create_namespace: true
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    update_repo_cache: true
+    values_files:
+      - "{{ headlamp_values_file }}"
+    wait: true

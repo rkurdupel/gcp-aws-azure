@@ -5,38 +5,24 @@
     mode: "0700"
 
 - name: add jetstack helm repo
-  ansible.builtin.command:
-    cmd: helm repo add {{ cert_manager_chart_repo_name }} {{ cert_manager_chart_repo_url }}
-  register: helm_repo_add
-  changed_when: "'has been added' in helm_repo_add.stdout"
-  failed_when:
-    - helm_repo_add.rc != 0
-    - "'already exists' not in helm_repo_add.stderr"
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  kubernetes.core_helm_repository:
+    name: "{{cert_manager_chart_repo_name}}"
+    repo_url: "{{cert_manager_chart_repo_url}}"
 
-- name: update helm repos
-  ansible.builtin.command: helm repo update
-  changed_when: false
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: install or upgrade cert-manager
-  ansible.builtin.command: >-
-    helm upgrade --install {{ cert_manager_release_name }}
-    {{ cert_manager_chart_repo_name }}/{{ cert_manager_chart_name }}
-    --namespace {{ cert_manager_namespace }}
-    --create-namespace
-    --version {{ cert_manager_chart_version }}
-    --kubeconfig /etc/rancher/k3s/k3s.yaml
-    --set crds.enabled=true
-  register: helm_install
-  changed_when: >-
-    'STATUS: deployed' in helm_install.stdout or
-    'STATUS: pending-upgrade' in helm_install.stdout or
-    'STATUS: pending-install' in helm_install.stdout
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yml
+  kubernetes.core.helm:
+    name: "{{cert_manager_release_name}}"
+    chart_ref: "{{ cert_manager_chart_repo_name }}/{{ cert_manager_chart_name }}"
+    chart_version: "{{ cert_manager_chart_version }}"
+    release_namespace: "{{ cert_manager_namespace }}" # install this release (cert-manager) and put in the cert-manager namespace
+    create_namespace: true  # create namespace if does not exist
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    update_repo_cache: true
+    wait: true  # after helm install/upgrade block helm until all resources are healthy before returning success
+    values:
+      crds:
+        enabled: true   # crds - custom resource definitions to add (to crds/ folder) from JetStack Github repo like ClusterIssuer
 
 - name: render cloudflare secret manifest
   ansible.builtin.template:
@@ -46,10 +32,10 @@
   no_log: true
 
 - name: apply cloudflare secret
-  ansible.builtin.command: kubectl apply -f {{ cert_manager_manifest_dir }}/cloudflare-secret.yml --kubeconfig /etc/rancher/k3s/k3s.yaml
-  changed_when: false
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yml
+  kubernetes.core.k8s:
+    state: present
+    src: "{{cert_manager_manifest_dir}}/cloudflare-secret.yml"
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
 
 - name: render ClusterIssuer manifests
   ansible.builtin.template:
@@ -61,10 +47,11 @@
     - issuer-prod.yml
 
 - name: apply ClusterIssuers
-  ansible.builtin.command: kubectl apply -f {{ cert_manager_manifest_dir }}/{{ item }} --kubeconfig /etc/rancher/k3s/k3s.yaml
+  kubenetes.core.k8s:
+    state: present
+    src: "{{cert_manager_manifest_dir}}/{{item}}"
   loop:
     - issuer-staging.yml
     - issuer-prod.yml
   changed_when: false
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+ 
