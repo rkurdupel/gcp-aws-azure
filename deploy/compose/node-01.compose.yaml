@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: "{{ postgres_image }}"
+    restart: unless-stopped
+    env_file:
+      - /etc/cognitor/history.env
+{% if runtime_backend == "postgres" %}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name={{ db_name }}
+{% endif %}
+    ports:
+      - "{{ postgres_bind_ip }}:5432:5432"
+    volumes:
+      - /var/lib/coin-ops/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+{% if runtime_backend == "external" %}
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    restart: unless-stopped
+    env_file:
+      - /etc/cognitor/history.env
+    ports:
+      - "5672:5672"
+    volumes:
+      - /var/lib/coin-ops/rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+{% endif %}
+
+  history-consumer:
+    image: "{{ history_consumer_image }}"
+    restart: unless-stopped
+    env_file:
+      - /etc/cognitor/history.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+{% if runtime_backend == "external" %}
+      rabbitmq:
+        condition: service_healthy
+{% endif %}
+
+  history-api:
+    image: "{{ history_api_image }}"
+    restart: unless-stopped
+    ports:
+      - "{{ history_port }}:{{ history_port }}"
+    env_file:
+      - /etc/cognitor/history.env
+    depends_on:
+      postgres:
+        condition: service_healthy

@@ -1,0 +1,12 @@
+services:
+  ui:
+    image: "{{ ui_image }}"
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - /etc/cognitor/ui.env
+    volumes:
+      - /opt/cognitor/ui/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/cognitor/tls:/etc/nginx/tls:ro
