@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: history-consumer
+  namespace: "{{ coinops_namespace }}"
+spec:
+  replicas: 1  # must be 1 - advisory lock ensures single consumer
+  selector:
+    matchLabels:
+      app: history-consumer
+  template:
+    metadata:
+      labels:
+        app: history-consumer
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -U $(POSTGRES_USER); do sleep 2; done
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+      containers:
+        - name: history-consumer
+          image: "rkurdupel/coin-ops-history-consumer:v1"
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: coinops-secrets

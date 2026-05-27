@@ -1,0 +1,9 @@
+- name: deploy coin-ops to k3s
+  hosts: k3s_node
+  become: true
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  roles:
+    - k3s_coinops
+
+# pods are distributed based on available resources among cluster (RAM, CPU cores etc)

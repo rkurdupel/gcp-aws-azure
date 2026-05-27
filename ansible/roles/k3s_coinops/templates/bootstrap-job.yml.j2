@@ -1,0 +1,49 @@
+# kind: job - one-time task runner
+# batch - contains job kind
+# a pod with two containers (initContainers, containers) inside
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: coinops-bootstrap
+  namespace: {{ coinops_namespace }}
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -U $POSTGRES_USER -d $POSTGRES_DB; do echo "waiting for postgres..."; sleep 3; done
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+      containers:
+        - name: bootstrap
+          image: rkurdupel/coin-ops-postgres:v1
+          command:
+            - sh
+            - -c
+            - |
+              echo "Running schema.sql..."
+              psql "$DATABASE_URL" -f /schema/schema.sql
+              echo "Running runtime_all.sql..."
+              psql "$DATABASE_URL" -f /schema/runtime_all.sql
+              echo "Bootstrap complete"
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+          # plug the data into this container at this path
+          volumeMounts:
+            - name: schema  # take the volume named schema and add this container at /schema path
+              mountPath: /schema  # create directory /schema 
+
+      # what data source to use (get schema from coinops-schema)
+      volumes:
+        - name: schema
+          configMap:
+            name: coinops-schema

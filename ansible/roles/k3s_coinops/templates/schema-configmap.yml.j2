@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coinops-schema
+  namespace: {{ coinops_namespace }}
+data:
+  schema.sql: |
+{{ lookup('file', playbook_dir + '/../history/schema.sql') | indent(4, True) }}
+  runtime_all.sql: |
+{{ lookup('file', playbook_dir + '/../runtime/runtime_all.sql') | indent(4, True) }}

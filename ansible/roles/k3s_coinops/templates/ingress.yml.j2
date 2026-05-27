@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress   # ingress always listens on 80/443
+metadata:
+  name: coinops
+  namespace: "{{ coinops_namespace }}"
+  annotations:
+    cert-manager.io/cluster-issuer: "{{ coinops_cert_issuer }}"
+spec:
+  ingressClassName: traefik
+  # tell traefik to use HTTPS for this host
+  tls:  
+    - hosts:
+        - "{{ coinops_domain }}"
+      secretName: coinops-tls
+  rules:
+    - host: "{{ coinops_domain }}"  # only match request for app.coin-ops.pp.ua
+      http:
+        paths:
+          - path: / # match any path starting with /
+            pathType: Prefix    # match everything / (/, /api, /history-api)
+            backend:
+              service:
+                name: gateway   # forward to gateway service
+                port:
+                  number: 80    # gateway service on port 80

@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy # name of the deployment
+  namespace: "{{ coinops_namespace }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy    # tell the deployment which pod to manage
+  template:
+    metadata:
+      labels:
+        app: proxy  # put the label on the pod when created
+    spec:
+      containers:
+        - name: proxy
+          image: "rkurdupel/coin-ops-proxy:v1"
+          imagePullPolicy: Always # allow to pull new images
+          ports:
+            - containerPort: {{ coinops_proxy_port }}   # port the app inside the container listens on
+          # load secrets
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+          # can this pod handle a request right now ? (health check)
+          # failure - remove pod from service and traefik does not where to go
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ coinops_proxy_port }}
+            initialDelaySeconds: 5  # wait 5s after continer starts before first check
+            periodSeconds: 5  # check every 5 sec
+          # is this pod still functioning ? 
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ coinops_proxy_port }}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: "{{ coinops_namespace }}"
+spec:
+  selector:
+    app: proxy  # forward to proxy app block
+  ports:
+    - port: {{ coinops_proxy_port }}  # port other pods use to reach this service
+      targetPort: {{ coinops_proxy_port }}  # port on the pod to forward traffic to

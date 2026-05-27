@@ -107,12 +107,22 @@ resource "cloudflare_record" "homepage" {
   proxied = false
 }
 
+
 resource "cloudflare_record" "headlamp" {
   zone_id = var.cloudflare_zone_id
   name    = "headlamp"
   type    = "A"
   content = module.vm["k3s-node-1"].private_ip
   ttl     = 60
+  proxied = false
+}
+
+resource "cloudflare_record" "coinops_app" {
+  zone_id = var.cloudflare_zone_id
+  name = "app"
+  type = "A"
+  content = module.vm["k3s-node-1"].public_ip
+  ttl = 60
   proxied = false
 }
 

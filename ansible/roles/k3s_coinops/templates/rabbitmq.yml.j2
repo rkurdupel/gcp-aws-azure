@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: "{{ coinops_namespace }}"
+spec:
+  selector:
+    matchLabels:
+      app: rabbitmq
+  serviceName: rabbitmq
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3-management-alpine
+          ports:
+            - containerPort: 5672   # AMQP
+            - containerPort: 15672  # management UI
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: "{{ rabbitmq_user }}"
+            - name: RABBITMQ_DEFAULT_PASS
+              value: "{{ rabbitmq_password }}"
+          readinessProbe:
+            tcpSocket:
+              port: 5672          # just check if port is open
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+  # volumeClaimTemplates - persistent storage request (StatefulSet only)
+  # unlike Deployment volumes which are temporary (after deletion, restart it disappears),
+  # this creates a PVC (Persistent Volume Claim) that survives pod restarts
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: "{{ coinops_storage_class }}"
+        resources:
+          requests:
+            storage: "{{ rabbitmq_storage }}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: "{{ coinops_namespace }}"
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+    - name: management
+      port: 15672
+      targetPort: 15672

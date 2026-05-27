@@ -1,0 +1,71 @@
+# create and manage postgresql pod
+apiVersion: apps/v1
+# deployment + persistent identity + stable storage (it storres state of db in a persistent volume on vm's local disk)
+kind: StatefulSet	
+metadata:
+  name: postgres
+  namespace: {{ coinops_namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: postgres
+  serviceName: postgres
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ coinops_postgres_image }}
+          args:
+            - postgres
+            - -c
+            - listen_addresses=*
+            - -c
+            - shared_preload_libraries=pg_cron
+            - -c
+            - cron.database_name={{ coinops_db_name }}
+          envFrom:
+            - secretRef:
+                name: coinops-secrets
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ coinops_db_user }}
+                - -d
+                - {{ coinops_db_name }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: {{ coinops_storage_class }}
+        resources:
+          requests:
+            storage: {{ coinops_postgres_storage }}
+---
+# give postgres stable address inside the cluster
+# when playbook runs - ip is assigned
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{ coinops_namespace }}
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

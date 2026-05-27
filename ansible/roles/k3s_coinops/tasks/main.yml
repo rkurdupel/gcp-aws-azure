@@ -1,0 +1,113 @@
+- name: skip task completion if current instance is not first node
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+
+- name: create coin-ops namespace
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{k3s_kubeconfig}}"
+    # definition - create manifest with parameters below
+    definition: 
+      apiVersion: v1  # which k8s api version handles this resource
+      kind: namespace # what type of resource to create
+      metadata:
+        name: "{{coinops_namespace}}"
+  
+- name: apply secret manifest
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{k3s_kubeconfig}}"
+    # {lookup('template', 'secret.yaml.j2')} - render the j2 template to string, 
+    # from_yaml converts it dicitonary because defintion requires dicitonary
+    definition: "{{lookup('template', 'secret.yml.j2') | from_yaml}}" 
+  no_log: true  # hide logs
+
+- name: apply postgres
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{k3s_kubeconfig}}"
+    definition: "{{item}}"
+    wait: true   # block and wait until the resource is actually ready (for 120 sec without specifying timeout)
+    wait_timeout: 300 #  # override waiting time to 300 sec
+  # from_yaml_all split by -- into multiple YAML documents , | list - convert to list so ansible can loop over it
+  loop: "{{lookup('template', 'postgres.yml.j2') | from_yaml_all | list}}"  
+  loop_control:
+    label: "{{item.kind}}/{{item.metadata.name}}"
+    # StatefukSet/postgres, Service/Postgres
+
+# load the schema sql into k8s memory (schema that creates db tables)
+- name: apply schema configmap
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{k3s_kubeconfig}}"
+    definition: "{{lookup('template', 'schema-configmap.yml.j2') | from_yaml}}"
+
+# one-time provisioning of the database (creates database tables)
+# RUNS ONLY ONCE
+- name: run bootstrap job
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{k3s_kubeconfig}}"
+    definition: "{{lookup('template', 'bootstrap-job.yml.j2') | from_yaml}}"
+    wait: true
+    wait_condition:
+      type: Complete
+      status: "True"
+    wait_timeout: 600
+
+- name: Apply proxy
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{k3s_kubeconfig}}"
+    definition: "{{item}}"
+  loop: "{{lookup('template', 'proxy.yml.j2') | from_yaml_all | list}}"
+
+- name: Apply history-api
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'history-api.yml.j2') | from_yaml_all | list }}"
+
+
+- name: apply history-consumer
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ lookup('template', 'history-consumer.yml.j2') | from_yaml }}"
+  
+- name: apply ui
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'ui.yml.j2') | from_yaml_all | list }}"
+
+- name: apply gateway
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'gateway.yml.j2') | from_yaml_all | list }}"
+
+
+- name: apply ingress rule
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{k3s_kubeconfig}}"
+    definition: "{{lookup('template', 'ingress.yml.j2') | from_yaml}}"
+  
+- name: Apply rabbitmq
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'rabbitmq.yml.j2') | from_yaml_all | list }}"
+
+- name: Apply redis
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition: "{{ item }}"
+  loop: "{{ lookup('template', 'redis.yml.j2') | from_yaml_all | list }}"

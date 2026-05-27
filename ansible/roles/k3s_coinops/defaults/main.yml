@@ -1,0 +1,31 @@
+k3s_kubeconfig: /etc/rancher/k3s/k3s.yaml
+k3s_first_node: "{{ansible_play_hosts_all[0]}}" # playbook only triggers hosts (k3s-node) specified in main playbook
+
+coinops_namespace: coin-ops
+
+coinops_domain: app.coin-ops.pp.ua
+coinops_cert_issuer: letencrypt-prod
+
+# from docker public registry
+coinops_proxy_image: rkurdupel/coin-ops-proxy:v1
+coinops_history_api_image: rkurdupel/coin-ops-history-api:v1
+coinops_history_consumer_image: rkurdupel/coin-ops-history-consumer:v1
+coinops_ui_image: rkurdupel/coin-ops-ui:v1
+coinops_postgres_image: rkurdupel/coin-ops-postgres:v1
+
+coinops_proxy_port: 8080
+coinops_history_port: 8000
+
+coinops_db_name: "{{lookup('env', 'POSTGRES_DB')}}"
+coinops_db_user: "{{lookup('env', 'POSTGRES_USER')}}"
+coinops_db_password: "{{lookup('env', 'POSTGRES_PASS')}}"
+
+coinops_runtime_backend: external # external / postgres
+coinops_postgres_storage: 2Gi
+coinops_storage_class: local-path # for PVC (StatefulState volume)
+
+rabbitmq_user: "{{ lookup('env', 'RABBITMQ_USER') }}"
+rabbitmq_password: "{{ lookup('env', 'COINOPS_RABBITMQ_PASSWORD') }}"
+redis_password: "{{ lookup('env', 'COINOPS_REDIS_PASSWORD') }}"
+rabbitmq_storage: 1Gi
+redis_storage: 1Gi
