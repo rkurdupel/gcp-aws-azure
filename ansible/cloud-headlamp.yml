@@ -1,7 +1,7 @@
-- name: install homepage on k3s
+- name: install headlamp ingress on k3s
   hosts: "{{ansible_play_hosts_all[0]}}" # playbook only triggers hosts (k3s-node) specified in main playbook
+  become: true
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   roles:
-    - homepage
-  
+    - headlamp
