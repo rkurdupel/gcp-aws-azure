@@ -5,9 +5,11 @@ metadata:
   namespace: "{{ coinops_namespace }}"
 spec:
   replicas: 1
+
   selector:
     matchLabels:
-      app: proxy    # tell the deployment which pod to manage
+      app: proxy    # tell the deployment which pod to manage (match all pods with label app:proxy)
+  # template - configure pod within Deployment
   template:
     metadata:
       labels:
@@ -46,7 +48,7 @@ metadata:
   namespace: "{{ coinops_namespace }}"
 spec:
   selector:
-    app: proxy  # forward to proxy app block
+    app: proxy  #  match all pods with label app:proxy
   ports:
-    - port: {{ coinops_proxy_port }}  # port other pods use to reach this service
-      targetPort: {{ coinops_proxy_port }}  # port on the pod to forward traffic to
+    - port: {{ coinops_proxy_port }}  # port, other pods use to reach this service
+      targetPort: {{ coinops_proxy_port }}  # to which port service should forward the requests to ( specified in container block )
