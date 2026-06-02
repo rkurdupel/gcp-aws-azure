@@ -24,4 +24,4 @@ spec:
         name: coinops-pg-credentials    # create secret with db credentials on first boot 
   postgresql:
     parameters:
-      cron.database_name: "{{ coinops_db_name }}" # tell pg_cron which db to use for scheduled jobs
+      cron.database_name: "{{ coinops_db_name }}" # tell pg_cron (pg_cron - cron job scheduler for PostgreSQL) which db to use for scheduled jobs

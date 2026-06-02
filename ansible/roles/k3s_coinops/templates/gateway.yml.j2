@@ -11,21 +11,21 @@ data:
         server_name _;
 
         location /api/ {
-            proxy_pass http://proxy.{{ coinops_app_namespace }}.svc.cluster.local:{{ coinops_proxy_port }}/;
+            proxy_pass http://proxy.{{ coinops_app_namespace }}:{{ coinops_proxy_port }}/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
         }
 
         location /history-api/ {
-            proxy_pass http://history-api.{{ coinops_app_namespace }}.svc.cluster.local:{{ coinops_history_port }}/;
+            proxy_pass http://history-api.{{ coinops_app_namespace }}:{{ coinops_history_port }}/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
         }
 
         location / {
-            proxy_pass http://ui.{{ coinops_app_namespace }}.svc.cluster.local:80/;
+            proxy_pass http://ui.{{ coinops_app_namespace }}:80/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
         }
