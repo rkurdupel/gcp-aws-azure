@@ -1,243 +1,216 @@
-# coinops — Multi-Cloud Infrastructure
+# Coin-Ops
 
-Currency rates tracking app deployed across AWS, GCP, and Azure using Terraform and Ansible.
+Multi-cloud infrastructure and application stack for tracking prediction-market and currency data.
 
-**Live (AWS):** http://app.coin-ops.pp.ua
+The repo contains:
 
----
-
-## Table of Contents
-
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Prerequisites](#prerequisites)
-- [Environment Variables](#environment-variables)
-- [Bootstrap](#bootstrap)
-- [Deploy](#deploy)
-- [Per-Instance Cloud Selection](#per-instance-cloud-selection)
-- [Useful Commands](#useful-commands)
-- [Cost Estimates](#cost-estimates)
-- [FAQ](#faq)
-
----
+- Terraform modules for AWS, GCP, and Azure VM networking and compute
+- Ansible playbooks for node provisioning, k3s, CloudNativePG, cert-manager, Headlamp, Homepage, and the Coin-Ops app
+- A React/Vite frontend served by nginx
+- A Go proxy API that fetches Polymarket, CoinGecko, and NBU data
+- A Python FastAPI history API and consumer for persisted market and price snapshots
+- Local Docker Compose wiring for development
 
 ## Architecture
 
-### AWS (Full Stack)
+Local development runs all application services with Docker Compose:
 
-```
-User
-  ↓
-app.coin-ops.pp.ua (Cloudflare DNS)
-  ↓
-AWS Application Load Balancer (port 443)
-  ↓
-  ├── app-1 VM (10.10.1.12)         app-2 VM (10.10.1.13)
-  │   nginx + ui + proxy + history   nginx + ui + proxy + history
-  └──────────────────┬───────────────────────────┘
-                     ↓
-               db VM (10.10.1.11)
-               rabbitmq + redis
-                     ↓
-               RDS PostgreSQL
+```text
+browser
+  -> ui nginx (:5000)
+      -> proxy API (:8080)
+      -> history API (:8000)
+          -> PostgreSQL
+proxy API -> Redis
+proxy API -> RabbitMQ -> history consumer -> PostgreSQL
 ```
 
-### Azure / GCP (VM Only)
+Cloud infrastructure is driven by `config/config.yml`.
 
-```
-User
-  ↓
-bastion (public IP)
-  ↓ SSH jump
-  ├── app-1 VM
-  ├── app-2 VM
-  └── db VM
-```
-
-### AWS Resources
-
-| Resource | Purpose |
-|---|---|
-| VPC `10.10.0.0/16` | Isolated network |
-| Public subnet `10.10.0.0/24` | Bastion |
-| Private subnet `10.10.1.0/24` | App and DB VMs |
-| Public subnet `10.10.2.0/24` | Second AZ for ALB |
-| NAT Gateway | Private VMs outbound internet |
-| Application Load Balancer | Traffic distribution across app VMs |
-| RDS PostgreSQL | Managed database |
-| Cloudflare DNS | Domain → ALB |
-
-### Security Groups (AWS)
-
-```
-bastion-sg:  SSH port 22 from operator IP only
-app-sg:      HTTP port 80 from ALB only, SSH from bastion only
-db-sg:       postgres/rabbitmq/redis from app VMs, SSH from bastion
-lb-sg:       HTTP 80 and HTTPS 443 from internet
-rds-sg:      postgres 5432 from app VMs only
+```text
+operator
+  -> bastion VM
+      -> k3s nodes
+          -> Coin-Ops workloads
+          -> RabbitMQ / Redis
+          -> CloudNativePG PostgreSQL
 ```
 
----
+AWS also includes optional managed resources in the Terraform module, including an ALB, ACM, Cloudflare DNS integration, and RDS outputs. GCP and Azure currently focus on VM/network provisioning.
 
-## Project Structure
+## Repository Layout
 
+```text
+.
++-- ansible/                 # cloud provisioning and k3s application deployment
++-- config/config.yml        # cloud, region, SSH, network, and instance configuration
++-- deploy/                  # deploy-time Docker/Kubernetes support assets
++-- history/                 # FastAPI history API and RabbitMQ/Postgres consumer
++-- proxy/                   # Go HTTP API and data-fetching service
++-- runtime/                 # PostgreSQL runtime schema, wrappers, cron, tests
++-- scripts/                 # terraform apply helper, inventory generation, verification
++-- terraform/               # root Terraform stack and cloud modules
++-- ui-react/                # React/Vite frontend
++-- docker-compose.yml       # local development stack
 ```
-coinops/
-  config/
-    config.yml                     ← master config: cloud, VMs, network, firewall
-
-  terraform/
-    main.tf                        ← calls aws/gcp/azure modules based on instances
-    locals.tf                      ← reads config.yml, filters instances per cloud
-    outputs.tf                     ← merges VM IPs from all active clouds
-    backend.tf                     ← S3 state bucket
-    provider.tf                    ← AWS, GCP, Cloudflare, Azure providers
-    versions.tf                    ← provider version constraints
-    variables.tf                   ← Cloudflare, DB, domain variables
-    modules/
-      aws/                         ← full stack: network, firewall, vm, alb, rds, acm
-      gcp/                         ← vm only: network, firewall, vm
-      azure/                       ← vm only: network, firewall, vm
-
-  ansible/
-    ansible.cfg                    ← SSH key, host key settings
-    inventory.cloud                ← AUTO-GENERATED by post-apply.sh
-    cloud-provision.yml            ← installs Docker on all VMs
-    cloud-deploy.yml               ← deploys app on VMs
-    group_vars/
-      all/main.yml                 ← reads secrets from environment
-    templates/
-      cloud-nginx.conf.j2          ← nginx routing
-      cloud-app.compose.yaml.j2    ← docker compose for app VMs
-      cloud-db.compose.yaml.j2     ← docker compose for db VM
-      cloud-app.env.j2             ← .env for app containers
-      cloud-db.env.j2              ← .env for db containers
-
-  scripts/
-    bootstrap-aws.sh               ← one-time AWS setup (IAM, S3, DynamoDB)
-    bootstrap-gcp.sh               ← one-time GCP setup (project, SA, bucket)
-    bootstrap-azure.sh             ← one-time Azure setup (SP, storage, identity)
-    post-apply.sh                  ← updates SSH config + inventory after apply
-    lab.sh                         ← one command deploy pipeline
-    verify_failover.sh             ← stops 1 VM, confirms failover works
-
-  ui/                              ← Flask UI service
-  proxy_service/                   ← Flask proxy (fetches currency prices)
-  history_service/                 ← Go history service (saves to postgres)
-  docker-compose.yml               ← local development only
-  .env.example                     ← environment variables template
-```
-
----
 
 ## Prerequisites
 
-| Tool | Version | Install |
-|---|---|---|
-| Terraform | >= 1.5.0 | `brew install terraform` |
-| Ansible | >= 2.14 | `pip install ansible` |
-| AWS CLI | >= 2.0 | `brew install awscli` |
-| Azure CLI | >= 2.0 | `brew install azure-cli` |
-| GCP CLI | >= 400.0 | `brew install google-cloud-sdk` |
-| Python 3 | >= 3.10 | built-in on Mac |
-| jq | any | `brew install jq` |
+For local development:
 
----
+- Docker and Docker Compose
+- Node.js and npm, if working on `ui-react` directly
+- Go, if working on `proxy` directly
+- Python 3.10+, if working on `history` directly
 
-## Environment Variables
+For cloud deployment:
 
-Copy `.env.example` to `.env` and fill in your values:
+- Terraform 1.5+
+- Ansible 2.14+
+- AWS CLI, Google Cloud CLI, and/or Azure CLI for the clouds you use
+- `jq`
+- An SSH key matching `config/config.yml`
+- Cloud provider credentials exported in your shell
+
+## Configuration
+
+Copy the example environment file and edit the values:
 
 ```bash
 cp .env.example .env
+source .env
 ```
 
-Never commit `.env` — it is in `.gitignore`.
-
-Key variables:
+Important variables:
 
 ```bash
-# Azure
-SUBSCRIPTION_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-AZURE_AUTH_LOCATION=~/.secrets/azure/sp-key.json
-AZURE_IDENTITY_ID=/subscriptions/.../userAssignedIdentities/coinops-dev-identity
+# Cloud credentials
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=eu-central-1
+export SUBSCRIPTION_ID=...
+export AZURE_AUTH_LOCATION=/path/to/sp-key.json
 
-# AWS
-AWS_ACCESS_KEY_ID=your_key
-AWS_SECRET_ACCESS_KEY=your_secret
-AWS_DEFAULT_REGION=eu-central-1
+# Terraform variables
+export TF_VAR_cloudflare_api_token=...
+export TF_VAR_cloudflare_zone_id=...
+export TF_VAR_domain_name=coin-ops.pp.ua
+export TF_VAR_db_name=currency_rates_tracker
+export TF_VAR_db_user=currency_app_user
+export TF_VAR_db_password=...
 
-# App secrets
-POSTGRES_USER=currency_app_user
-POSTGRES_PASS=yourpassword
-POSTGRES_DB=currency_rates_tracker
-POSTGRES_TABLE=currency_rates
-RABBITMQ_USER=currency_app_user
-RABBITMQ_PASS=yourpassword
-RABBITMQ_QUEUE=currency_rates
-REDIS_PASSWORD=yourpassword
-SECRET_KEY=yoursecretkey
+# Application secrets
+export POSTGRES_USER=currency_app_user
+export POSTGRES_PASS=...
+export POSTGRES_DB=currency_rates_tracker
+export RABBITMQ_USER=currency_app_user
+export RABBITMQ_PASS=...
+export REDIS_PASSWORD=...
 
 # SSH
-SSH_KEY_PATH=~/.ssh/id_ed25519
+export SSH_KEY_PATH=~/.ssh/id_ed25519
 ```
 
----
-
-## Bootstrap
-
-Bootstrap creates the prerequisites for Terraform state storage and cloud authentication. Run once per cloud.
-
-### AWS Bootstrap
-
-Creates IAM user, S3 bucket for state, DynamoDB for state locking:
-
-```bash
-bash scripts/bootstrap-aws.sh
-source .env
-```
-
-### GCP Bootstrap
-
-Creates GCP project, Service Account, GCS bucket for state:
-
-```bash
-export BILLING_ACCOUNT_ID=your_billing_account_id
-bash scripts/bootstrap-gcp.sh
-source .env
-```
-
-### Azure Bootstrap
-
-Creates Resource Group, Service Principal, Storage Account + Container for state, User Assigned Identity:
-
-```bash
-export SUBSCRIPTION_ID=your_subscription_id
-bash scripts/bootstrap-azure.sh
-source .env
-```
-
----
-
-## Deploy
-
-### Quick Deploy (one command)
-
-```bash
-source .env
-./scripts/lab.sh full
-```
-
-### Manual Step by Step
-
-**Step 1 — Set cloud in config:**
+The active cloud and VM layout are controlled in `config/config.yml`:
 
 ```yaml
-# config/config.yml
-cloud: aws  # aws | gcp | azure
+cloud: gcp # aws | gcp | azure
+
+instances:
+  bastion:
+    public: true
+    private_ip: 10.10.0.10
+    tags:
+      - bastion
+  k3s-node-1:
+    public: true
+    private_ip: 10.10.1.11
+    tags:
+      - k3s-node
 ```
 
-**Step 2 — Terraform: create infrastructure**
+An instance can override the top-level cloud by adding `cloud: aws`, `cloud: gcp`, or `cloud: azure`.
+
+## Local Development
+
+Start the full local stack:
+
+```bash
+docker compose up --build
+```
+
+Open the UI:
+
+```text
+http://localhost:5000
+```
+
+Useful local endpoints:
+
+```text
+http://localhost:5000/api/health
+http://localhost:5000/api/current
+http://localhost:5000/api/prices
+http://localhost:5000/history-api/health
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Remove local database state:
+
+```bash
+docker compose down -v
+```
+
+## Frontend Development
+
+```bash
+cd ui-react
+npm install
+npm run dev
+```
+
+The frontend defaults to:
+
+```text
+PROXY_URL=/api
+HISTORY_URL=/history-api
+```
+
+For standalone Vite development, set `VITE_PROXY_URL` and `VITE_HISTORY_URL` or use the runtime config in `ui-react/public/config.js`.
+
+## Cloud Bootstrap
+
+Run the bootstrap script only for the clouds you plan to use. These scripts create or prepare state storage and cloud identities.
+
+```bash
+# AWS
+bash bootstrap-aws.sh
+
+# GCP
+export BILLING_ACCOUNT_ID=...
+bash bootstrap-gcp.sh
+
+# Azure
+export SUBSCRIPTION_ID=...
+bash bootstrap-azure.sh
+```
+
+After bootstrap, reload your environment:
+
+```bash
+source .env
+```
+
+## Cloud Deployment
+
+1. Choose the target cloud and instance layout in `config/config.yml`.
+
+2. Create or update infrastructure:
 
 ```bash
 cd terraform
@@ -247,231 +220,140 @@ terraform apply
 cd ..
 ```
 
-**Step 3 — Generate SSH config and Ansible inventory**
+3. Generate Ansible inventory and SSH config:
 
 ```bash
 ./scripts/post-apply.sh
 ```
 
-Test SSH:
-```bash
-ssh coinops-bastion
-ssh coinops-db
-ssh coinops-app-1
-ssh coinops-app-2
-```
+This writes:
 
-**Step 4 — Install Docker on all VMs (AWS only)**
+- `ansible/inventory.cloud`
+- `~/.ssh/coinops-aws.generated`
+
+4. Provision and deploy the Kubernetes stack:
 
 ```bash
 source .env
 ansible-playbook -i ansible/inventory.cloud ansible/cloud-provision.yml
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-k3s.yml
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-cnpg.yml
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-cert-manager.yml
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-coinops.yml
 ```
 
-**Step 5 — Deploy app (AWS only)**
+Optional add-ons:
 
 ```bash
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-deploy.yml
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-headlamp.yml
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-homepage.yml
+ansible-playbook -i ansible/inventory.cloud ansible/cloud-tailscale.yml
 ```
 
-**Step 6 — Verify**
-
-```bash
-# AWS with ALB
-curl http://app.coin-ops.pp.ua/health
-
-# Azure/GCP via SSH tunnel
-ssh -N -L 19080:127.0.0.1:80 -J rkurdupel@<bastion-ip> rkurdupel@10.10.1.12
-open http://127.0.0.1:19080
-```
-
-**Step 7 — Destroy when done**
-
-```bash
-cd terraform && terraform destroy
-```
-
----
-
-## Per-Instance Cloud Selection
-
-Each VM can be deployed to a different cloud. If no cloud is specified for an instance it uses the top-level `cloud:` value.
-
-**Config example:**
-
-```yaml
-cloud: aws  # default cloud for instances without cloud specified
-
-instances:
-  bastion:
-    cloud: aws      # explicitly on AWS
-    private_ip: 10.10.0.10
-  db:
-    cloud: azure    # explicitly on Azure
-    private_ip: 10.10.1.11
-  app-1:
-    cloud: gcp      # explicitly on GCP
-    private_ip: 10.10.1.12
-  app-2:
-              # no cloud → uses default: aws
-    private_ip: 10.10.1.13
-```
-
-Result:
-- bastion → AWS
-- db → Azure
-- app-1 → GCP
-- app-2 → AWS (default)
-
-**Important:** VMs on different clouds cannot communicate by default. Cross-cloud networking requires VPN or overlay network (e.g. Tailscale).
-
----
-
-## Useful Commands
-
-### SSH into VMs
+5. Verify SSH access:
 
 ```bash
 ssh coinops-bastion
-ssh coinops-db
-ssh coinops-app-1
-ssh coinops-app-2
+ssh coinops-k3s-node-1
+ssh coinops-k3s-node-2
+ssh coinops-k3s-node-3
 ```
 
-### Check running containers
-
-```bash
-# app VMs
-ssh coinops-app-1 'sudo docker ps'
-ssh coinops-app-1 'sudo docker logs cloud-app-nginx-1 --tail 20'
-ssh coinops-app-1 'sudo docker logs cloud-app-ui-1 --tail 20'
-ssh coinops-app-1 'sudo docker logs cloud-app-proxy-1 --tail 20'
-ssh coinops-app-1 'sudo docker logs cloud-app-history-1 --tail 20'
-
-# db VM
-ssh coinops-db 'sudo docker ps'
-ssh coinops-db 'sudo docker logs cloud-db-postgres-1 --tail 20'
-```
-
-### Redeploy after code changes
-
-```bash
-ansible-playbook -i ansible/inventory.cloud ansible/cloud-deploy.yml
-```
-
-### Terraform outputs
+6. Destroy lab infrastructure when finished:
 
 ```bash
 cd terraform
-terraform output bastion_public_ip
-terraform output alb_dns_name
-terraform output ansible_inventory
-terraform output vm_ips
+terraform destroy
 ```
 
-### Update SSH config after terraform apply
+## Helper Scripts
+
+`scripts/post-apply.sh` reads Terraform outputs, writes Ansible inventory, writes an SSH include file, clears old known-host entries, and records the RDS endpoint in `.env` when present.
+
+`scripts/lab.sh apply` runs Terraform apply and then `post-apply.sh`.
+
+`scripts/lab.sh verify` runs `scripts/verify_failover.sh`.
+
+The `deploy` and `full` subcommands in `scripts/lab.sh` still reference an older Ansible deployment playbook name. Prefer the explicit Ansible commands above until that helper is updated.
+
+## Tests
+
+Frontend:
+
+```bash
+cd ui-react
+npm run lint
+npm run test:run
+npm run build
+```
+
+Go proxy:
+
+```bash
+cd proxy
+go test ./...
+```
+
+Python history service dependencies:
+
+```bash
+cd history
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+No Python test files are currently checked in. `history/pytest.ini` is ready for tests under `tests/python/unit`.
+
+PostgreSQL runtime SQL:
+
+```bash
+psql "$DATABASE_URL" -f runtime/runtime_all.sql
+psql "$DATABASE_URL" -f runtime/tests/test_runtime.sql
+```
+
+## Operational Notes
+
+- `config/config.yml` is the source of truth for cloud selection, regions, instance sizes, images, network ranges, and SSH settings.
+- Cross-cloud private networking is not automatic. Instances in different clouds need an overlay or VPN such as Tailscale.
+- Private k3s nodes are reached through the bastion using the generated SSH config.
+- The k3s app role uses Docker images defined in `ansible/roles/k3s_coinops/defaults/main.yml`.
+- Cloud costs continue until resources are destroyed. Run `terraform destroy` when the lab is no longer needed.
+
+## Troubleshooting
+
+Regenerate inventory after every Terraform apply:
 
 ```bash
 ./scripts/post-apply.sh
 ```
 
-### Clear old SSH host keys
+If SSH host keys changed after recreating VMs:
 
 ```bash
 ssh-keygen -R 10.10.0.10
 ssh-keygen -R 10.10.1.11
 ssh-keygen -R 10.10.1.12
 ssh-keygen -R 10.10.1.13
+./scripts/post-apply.sh
 ```
 
-### Check ALB target health (AWS)
+Check Terraform outputs:
 
 ```bash
-aws elbv2 describe-target-health \
-  --target-group-arn YOUR_TARGET_GROUP_ARN \
-  --region eu-central-1
+cd terraform
+terraform output vm_ips
+terraform output ansible_inventory
+terraform output ssh_config
+terraform output alb_dns_name
+terraform output rds_endpoint
 ```
 
-### Verify failover (AWS)
+Check local containers:
 
 ```bash
-./scripts/verify_failover.sh
+docker compose ps
+docker compose logs -f proxy
+docker compose logs -f history-api
+docker compose logs -f history-consumer
 ```
-
-### Switch cloud
-
-```bash
-# edit config/config.yml
-cloud: azure  # change to aws | gcp | azure
-
-# destroy old cloud resources
-cd terraform && terraform destroy
-
-# apply new cloud
-terraform apply
-```
-
----
-
-## Cost Estimates
-
-### AWS (per hour)
-
-| Resource | Cost |
-|---|---|
-| 4x t3.micro EC2 | ~$0.084/h |
-| NAT Gateway | ~$0.045/h |
-| ALB | ~$0.008/h |
-| RDS t3.micro | ~$0.017/h |
-| Elastic IP | ~$0.005/h |
-| **Total** | **~$0.16/h (~$3.84/day)** |
-
-### Azure (per hour)
-
-| Resource | Cost |
-|---|---|
-| 4x Standard_F1als_v7 | ~$0.02/h |
-| NAT Gateway | ~$0.045/h |
-| Public IP | ~$0.004/h |
-| **Total** | **~$0.07/h (~$1.68/day)** |
-
-### GCP (per hour)
-
-| Resource | Cost |
-|---|---|
-| 4x e2-micro | ~$0.032/h |
-| Cloud NAT | ~$0.044/h |
-| **Total** | **~$0.08/h (~$1.92/day)** |
-
-Always run `terraform destroy` when not using it.
-
----
-
-## FAQ
-
-**Q: Why does switching cloud destroy existing VMs?**
-When you change `cloud:` in config.yml and run `terraform apply`, Terraform destroys resources from the previous cloud. Use per-instance cloud selection to keep VMs on multiple clouds simultaneously.
-
-**Q: Why can't VMs on different clouds communicate?**
-Each cloud has its own private network. Without VPN or overlay networking (Tailscale, Cloudflare Tunnel) they cannot reach each other's private IPs.
-
-**Q: Why does Azure need a NIC as a separate resource?**
-Azure requires explicit Network Interface Card creation unlike AWS and GCP which handle it internally. The NIC connects the VM to the subnet and holds the private/public IP configuration.
-
-**Q: Why does Azure need a NAT Gateway?**
-Private VMs have no public IP. NAT Gateway gives them outbound internet access (apt update, docker pull) without being reachable from the internet.
-
-**Q: What is a Service Principal?**
-Azure's equivalent of an AWS IAM user or GCP Service Account. A non-interactive identity used by Terraform to authenticate to Azure without browser login.
-
-**Q: What is a User Assigned Identity?**
-A Managed Identity created separately and attached to VMs. VMs use it to authenticate to Azure services (Key Vault, Container Registry) without storing credentials.
-
-**Q: Why does `post-apply.sh` need to run after every `terraform apply`?**
-Every apply may change VM IPs (especially bastion after destroy+apply). `post-apply.sh` reads new IPs from Terraform outputs and updates local SSH config and Ansible inventory.
-
-**Q: Why Standard_F1als_v7 for Azure instead of B1s?**
-`Standard_B1s` is unavailable in most European Azure regions due to capacity constraints on free tier subscriptions. `Standard_F1als_v7` is a 1 vCPU size available in West Europe with no restrictions.
-
-**Q: How much does this cost on Azure per hour?**
-4x `Standard_F1als_v7` + NAT Gateway + Public IP ≈ $0.07/hour. Always destroy when not in use.
