@@ -5,12 +5,13 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: coinops-bootstrap
-  namespace: {{ coinops_namespace }}
+  namespace: {{ coinops_data_namespace }}
 spec:
   backoffLimit: 5
   template:
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: OnFailure  # restart the pod if the job fails, but not if it succeeds (default is Always, which would restart even on success)
+      ttlSecondsAfterFinished: 300 # delete job after 300 seconds of completion
 
       initContainers:
         - name: wait-for-postgres
@@ -18,7 +19,7 @@ spec:
           command:
             - sh
             - -c
-            - until pg_isready -h postgres -U $POSTGRES_USER -d $POSTGRES_DB; do echo "waiting for postgres..."; sleep 3; done
+            - until pg_isready -h postgres-rw.{{ coinops_data_namespace }} -U $POSTGRES_USER; do sleep 2; done
           envFrom:
             - secretRef:
                 name: coinops-secrets

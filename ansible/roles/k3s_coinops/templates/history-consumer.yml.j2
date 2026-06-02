@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: history-consumer
-  namespace: "{{ coinops_namespace }}"
+  namespace: "{{ coinops_app_namespace }}"
 spec:
   replicas: 1  # must be 1 - advisory lock ensures single consumer
   selector:
@@ -19,7 +19,7 @@ spec:
           command:
             - sh
             - -c
-            - until pg_isready -h postgres -U $(POSTGRES_USER); do sleep 2; done
+            - "until pg_isready -h postgres-rw.{{ coinops_data_namespace }} -U $(POSTGRES_USER); do sleep 2; done"
           envFrom:
             - secretRef:
                 name: coinops-secrets

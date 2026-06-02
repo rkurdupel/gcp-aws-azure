@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress   # ingress always listens on 80/443
 metadata:
   name: coinops
-  namespace: "{{ coinops_namespace }}"
+  namespace: "{{ coinops_ingress_namespace }}"
   annotations:
     cert-manager.io/cluster-issuer: "{{ coinops_cert_issuer }}"
 spec:

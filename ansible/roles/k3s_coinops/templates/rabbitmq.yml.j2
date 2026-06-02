@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: rabbitmq
-  namespace: "{{ coinops_namespace }}"
+  namespace: "{{ coinops_data_namespace }}"
 spec:
   selector:
     matchLabels:
@@ -50,7 +50,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: rabbitmq
-  namespace: "{{ coinops_namespace }}"
+  namespace: "{{ coinops_data_namespace }}"
 spec:
   selector:
     app: rabbitmq

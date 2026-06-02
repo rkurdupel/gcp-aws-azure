@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: proxy # name of the deployment
-  namespace: "{{ coinops_namespace }}"
+  namespace: "{{ coinops_app_namespace }}"
 spec:
   replicas: 1
 
@@ -45,7 +45,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: proxy
-  namespace: "{{ coinops_namespace }}"
+  namespace: "{{ coinops_app_namespace }}"
 spec:
   selector:
     app: proxy  #  match all pods with label app:proxy
