@@ -1,0 +1,7 @@
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+cnpg_chart_repo_name: cnpg
+cnpg_chart_repo_url: https://cloudnative-pg.github.io/charts
+cnpg_chart_name: cloudnative-pg
+cnpg_chart_version: "0.23.0"
+cnpg_namespace: cnpg-system
+cnpg_release_name: cnpg

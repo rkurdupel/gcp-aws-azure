@@ -1,0 +1,19 @@
+- name: Skip if not first node
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
+- name: Add CNPG helm repo
+  kubernetes.core.helm_repository:
+    name: "{{ cnpg_chart_repo_name }}"
+    repo_url: "{{ cnpg_chart_repo_url }}"
+
+- name: Install or upgrade CNPG operator
+  kubernetes.core.helm:
+    name: "{{ cnpg_release_name }}"
+    chart_ref: "{{ cnpg_chart_repo_name }}/{{ cnpg_chart_name }}"
+    chart_version: "{{ cnpg_chart_version }}"
+    release_namespace: "{{ cnpg_namespace }}"
+    create_namespace: true
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    update_repo_cache: true
+    wait: true

@@ -1,0 +1,7 @@
+- name: Install CNPG operator
+  hosts: k3s_node
+  become: true
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  roles:
+    - k3s_cnpg
