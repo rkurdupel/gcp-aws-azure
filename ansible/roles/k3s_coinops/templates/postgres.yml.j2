@@ -1,71 +1,27 @@
-# create and manage postgresql pod
-apiVersion: apps/v1
-# deployment + persistent identity + stable storage (it storres state of db in a persistent volume on vm's local disk)
-kind: StatefulSet	
+# CNPG Cluster - replaces StatefulSet (custom kind after installing CNPG)
+# operator creates postgres pod and manages it
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
 metadata:
   name: postgres
-  namespace: {{ coinops_namespace }}
+  namespace: "{{ coinops_data_namespace }}"
 spec:
-  selector:
-    matchLabels:
-      app: postgres
-  serviceName: postgres
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        app: postgres
-    spec:
-      containers:
-        - name: postgres
-          image: {{ coinops_postgres_image }}
-          args:
-            - postgres
-            - -c
-            - listen_addresses=*
-            - -c
-            - shared_preload_libraries=pg_cron
-            - -c
-            - cron.database_name={{ coinops_db_name }}
-          envFrom:
-            - secretRef:
-                name: coinops-secrets
-          ports:
-            - containerPort: 5432
-          volumeMounts:
-            - name: postgres-data
-              mountPath: /var/lib/postgresql/data
-          readinessProbe:
-            exec:
-              command:
-                - pg_isready
-                - -U
-                - {{ coinops_db_user }}
-                - -d
-                - {{ coinops_db_name }}
-            initialDelaySeconds: 10
-            periodSeconds: 5
-  volumeClaimTemplates:
-    - metadata:
-        name: postgres-data
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        storageClassName: {{ coinops_storage_class }}
-        resources:
-          requests:
-            storage: {{ coinops_postgres_storage }}
----
-# give postgres stable address inside the cluster
-# when playbook runs - ip is assigned
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-  namespace: {{ coinops_namespace }}
-spec:
-  selector:
-    app: postgres
-  ports:
-    - port: 5432
-      targetPort: 5432
+  instances: 1
+  imageName: "{{ coinops_postgres_image }}"
+  # controls what happens when CNPG needs to update postgres image - unsupervised means it will restart the pod without waiting for user manual input
+  # manual input example would be to run "kubectl cnpg update postgres -n {{ coinops_data_namespace }} --image {{ coinops_postgres_image }}" to trigger the update
+  # example of update is when there is a new postgres image version available and CNPG detects it and needs to update the image in the cluster
+  primaryUpdateStrategy: unsupervised
+  imagePullPolicy: IfNotPresent # use local image (from cache) if available, otherwise pull from registry
+  storage:
+    size: "{{ coinops_postgres_storage }}"
+    storageClass: "{{ coinops_storage_class }}"
+  bootstrap:
+    initdb:
+      database: "{{ coinops_db_name }}" # create db on first boot
+      owner: "{{ coinops_db_user }}"  #  create db user on first boot (user created based on secret values (username and password))
+      secret:
+        name: coinops-pg-credentials    # create secret with db credentials on first boot 
+  postgresql:
+    parameters:
+      cron.database_name: "{{ coinops_db_name }}" # tell pg_cron which db to use for scheduled jobs

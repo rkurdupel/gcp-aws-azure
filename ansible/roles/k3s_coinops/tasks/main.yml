@@ -2,17 +2,36 @@
   ansible.builtin.meta: end_host
   when: inventory_hostname != k3s_first_node
 
-
-- name: create coin-ops namespace
+- name: create data namespace
   kubernetes.core.k8s:
     state: present
-    kubeconfig: "{{k3s_kubeconfig}}"
+    kubeconfig: "{{ k3s_kubeconfig }}"
     # definition - create manifest with parameters below
-    definition: 
+    definition:
       apiVersion: v1  # which k8s api version handles this resource
-      kind: namespace # what type of resource to create
+      kind: Namespace  # what type of resource to create
       metadata:
-        name: "{{coinops_namespace}}"
+        name: "{{ coinops_data_namespace }}"
+
+- name: create app namespace
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ coinops_app_namespace }}"
+
+- name: create ingress namespace
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ coinops_ingress_namespace }}"
   
 - name: apply secret manifest
   kubernetes.core.k8s:
@@ -20,8 +39,20 @@
     kubeconfig: "{{k3s_kubeconfig}}"
     # {lookup('template', 'secret.yaml.j2')} - render the j2 template to string, 
     # from_yaml converts it dicitonary because defintion requires dicitonary
-    definition: "{{lookup('template', 'secret.yml.j2') | from_yaml}}" 
+    definition: "{{lookup('template', 'secret.yml.j2') | from_yaml}}"
+  loop: 
+    - "{{coinops_data_namespace}}"
+    - "{{coinops_app_namespace}}" #  loop through namespaces 
+  vars:
+    secret_namespace: "{{item}}"  # apply secrets to app and data namespaces  
   no_log: true  # hide logs
+
+- name: apply secret manifest for CNPG bootstrap
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: "{{k3s_kubeconfig}}"
+    definition: "{{lookup('template', 'secret-pg.yml.j2') | from_yaml}}"
+  no_log: true
 
 - name: apply postgres
   kubernetes.core.k8s:

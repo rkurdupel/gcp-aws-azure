@@ -17,8 +17,9 @@ RUN apt-get update \
         postgresql-16 \
         postgresql-16-cron \
         tzdata \
-    && groupmod -g 70 postgres \
-    && usermod -u 70 -g 70 postgres \
+    && groupdel tape \
+    && groupmod -g 26 postgres \
+    && usermod -u 26 -g 26 postgres \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=postgres-entrypoint /usr/local/bin/docker-entrypoint.sh /usr/local/bin/
