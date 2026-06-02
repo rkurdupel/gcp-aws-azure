@@ -52,6 +52,63 @@ Cloud deployments run on k3s, a lightweight Kubernetes distribution installed by
 
 The Kubernetes manifests are rendered from Ansible role templates under `ansible/roles/k3s_coinops/templates/`.
 
+## Useful Kubernetes Commands
+
+Run Kubernetes commands on the first k3s node:
+
+```bash
+ssh coinops-k3s-node-1
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+```
+
+Cluster overview:
+
+```bash
+kubectl get nodes -o wide
+kubectl get namespaces
+kubectl get pods -A -o wide
+kubectl get events -A --sort-by=.lastTimestamp
+```
+
+Coin-Ops application:
+
+```bash
+kubectl get pods -n coin-ops-app -o wide
+kubectl get deploy,svc,ingress -n coin-ops-app
+kubectl logs -n coin-ops-app deploy/proxy --tail=100
+kubectl logs -n coin-ops-app deploy/history-api --tail=100
+kubectl logs -n coin-ops-app deploy/history-consumer --tail=100
+kubectl describe pod -n coin-ops-app <pod-name>
+```
+
+Data layer and CNPG:
+
+```bash
+kubectl get pods -n coin-ops-data -o wide
+kubectl get cluster -n coin-ops-data
+kubectl get pvc -n coin-ops-data
+kubectl describe cluster -n coin-ops-data postgres
+```
+
+Ingress, TLS, and cert-manager:
+
+```bash
+kubectl get ingress -A
+kubectl get certificate,clusterissuer -A
+kubectl get pods -n cert-manager
+kubectl logs -n cert-manager deploy/cert-manager --tail=100
+```
+
+Quick health checks from inside the cluster:
+
+```bash
+kubectl run curl-check -n coin-ops-app --rm -it --image=curlimages/curl --restart=Never -- \
+  curl -sS http://proxy:8080/health
+
+kubectl run curl-history -n coin-ops-app --rm -it --image=curlimages/curl --restart=Never -- \
+  curl -sS http://history-api:8000/health
+```
+
 ## Repository Layout
 
 ```text
