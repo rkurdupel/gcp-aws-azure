@@ -29,7 +29,8 @@ ansible_deploy() {
     cd "$REPO_ROOT"
     source .env
     ansible-playbook -i ansible/inventory.cloud ansible/cloud-provision.yml
-    ansible-playbook -i ansible/inventory.cloud ansible/cloud-deploy.yml
+    ansible-playbook -i ansible/inventory.cloud ansible/cloud-cnpg.yml
+    ansible-playbook -i ansible/inventory.cloud ansible/cloud-coinops.yml
 }
 
 cmd="${1:-}"

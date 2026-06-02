@@ -6,6 +6,7 @@ The repo contains:
 
 - Terraform modules for AWS, GCP, and Azure VM networking and compute
 - Ansible playbooks for node provisioning, k3s, CloudNativePG, cert-manager, Headlamp, Homepage, and the Coin-Ops app
+- A Kubernetes deployment layer built on a multi-node k3s cluster
 - A React/Vite frontend served by nginx
 - A Go proxy API that fetches Polymarket, CoinGecko, and NBU data
 - A Python FastAPI history API and consumer for persisted market and price snapshots
@@ -37,6 +38,19 @@ operator
 ```
 
 AWS also includes optional managed resources in the Terraform module, including an ALB, ACM, Cloudflare DNS integration, and RDS outputs. GCP and Azure currently focus on VM/network provisioning.
+
+## Kubernetes Stack
+
+Cloud deployments run on k3s, a lightweight Kubernetes distribution installed by Ansible on the `k3s-node-*` VMs. The stack includes:
+
+- k3s cluster nodes managed by `ansible/cloud-k3s.yml`
+- CloudNativePG (CNPG) operator and PostgreSQL cluster managed by `ansible/cloud-cnpg.yml`
+- cert-manager and Cloudflare DNS challenge issuers for TLS certificates
+- Coin-Ops application workloads in Kubernetes: UI, Go proxy, history API, history consumer, RabbitMQ, Redis, and PostgreSQL bootstrap job
+- Traefik ingress routing for the public app domain
+- Optional Headlamp and Homepage add-ons for cluster UI and dashboard access
+
+The Kubernetes manifests are rendered from Ansible role templates under `ansible/roles/k3s_coinops/templates/`.
 
 ## Repository Layout
 
