@@ -1,5 +1,5 @@
 - name: install cert-manager and ClusterIssuers on k3s
-  hosts: "{{ansible_play_hosts_all[0]}}" # playbook only triggers hosts (k3s-node) specified in main playbook
+  hosts: k3s_node # playbook only triggers hosts (k3s-node) specified in main playbook
   become: true
   roles: 
     - cert-manager

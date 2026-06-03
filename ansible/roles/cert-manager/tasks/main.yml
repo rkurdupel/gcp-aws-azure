@@ -1,3 +1,7 @@
+- name: Skip if not first node
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
 - name: ensure manifest directory exists
   ansible.builtin.file:
     path: "{{ cert_manager_manifest_dir }}"
@@ -5,10 +9,9 @@
     mode: "0700"
 
 - name: add jetstack helm repo
-  kubernetes.core_helm_repository:
+  kubernetes.core.helm_repository:
     name: "{{cert_manager_chart_repo_name}}"
     repo_url: "{{cert_manager_chart_repo_url}}"
-
 
 - name: install or upgrade cert-manager
   kubernetes.core.helm:
@@ -47,9 +50,10 @@
     - issuer-prod.yml
 
 - name: apply ClusterIssuers
-  kubenetes.core.k8s:
+  kubernetes.core.k8s:
     state: present
     src: "{{cert_manager_manifest_dir}}/{{item}}"
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
   loop:
     - issuer-staging.yml
     - issuer-prod.yml
