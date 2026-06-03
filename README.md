@@ -2,6 +2,38 @@
 
 Multi-cloud infrastructure and application stack for tracking prediction-market and currency data.
 
+## Kubernetes Commands
+
+Useful `kubectl` commands for day-to-day cluster work:
+
+```bash
+# Basic inspection
+kubectl get nodes
+kubectl get pods -A
+kubectl get svc -A
+kubectl get deployments -A
+
+# Focus on one namespace
+kubectl get pods -n <namespace>
+kubectl describe pod <pod-name> -n <namespace>
+kubectl logs <pod-name> -n <namespace>
+kubectl logs -f <pod-name> -n <namespace>
+
+# Exec into a running container
+kubectl exec -it <pod-name> -n <namespace> -- /bin/sh
+
+# Apply and verify resources
+kubectl apply -f <manifest>.yaml
+kubectl delete -f <manifest>.yaml
+kubectl rollout status deployment/<deployment-name> -n <namespace>
+kubectl rollout restart deployment/<deployment-name> -n <namespace>
+
+# Cluster context and access
+kubectl config get-contexts
+kubectl config use-context <context-name>
+kubectl config current-context
+```
+
 The repo contains:
 
 - Terraform modules for AWS, GCP, and Azure VM networking and compute
