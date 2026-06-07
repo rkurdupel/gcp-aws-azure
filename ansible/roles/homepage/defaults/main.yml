@@ -5,6 +5,7 @@ homepage_chart_repo_url: https://jameswynn.github.io/helm-charts
 homepage_chart_name: homepage
 homepage_chart_version: 2.0.2
 
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}" # node get's from list of hosts in run playbook (k3s_node) so to get first node from list we use ansible_play_hosts_all[0]
 #ingress
 homepage_host: home.coin-ops.pp.ua
 homepage_tls_secret_name: homepage-tls  # box where https cert from letsencrypt is saved

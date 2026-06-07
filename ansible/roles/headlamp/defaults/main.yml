@@ -6,6 +6,8 @@ headlamp_chart_repo_url: https://kubernetes-sigs.github.io/headlamp/
 headlamp_chart_name: headlamp
 headlamp_chart_version: 0.39.0
 
+k3s_first_node: "{{ ansible_play_hosts_all[0] }}"
+
 # Ingress
 headlamp_host: headlamp.coin-ops.pp.ua
 

@@ -1,3 +1,7 @@
+- name: Skip if not first node
+  ansible.builtin.meta: end_host
+  when: inventory_hostname != k3s_first_node
+
 # add a helm repo (headlamp) to the local helm config , if addedd - skip
 - name: ensure helm repo is added
   kubernetes.core.helm_repository:
