@@ -16,11 +16,9 @@
 
 - name: install python kubernetes library for ansible modules
   ansible.builtin.pip:
-    name:
-      - kubernetes
-      - PyYAML
-    state: present
+    name: kubernetes
     break_system_packages: true # force ubuntu 24.04 to install system-wide
+    extra_args: --ignore-installed  # ignore already installed version of kubernetes library , just install version , and don't try to uninstall or upgrade anything
 
 - name: Set timezone to UTC
   community.general.timezone:

@@ -56,8 +56,7 @@
 
 # run tailscale build command 
 - name: join tailnet
-  ansible.builtin.command: "{{tailscale_up_args}}"
-  when: tailscale_backend_state | default('NoState') != 'Running' # run this task when the tailscale backend state is anything other than running
+  ansible.builtin.command: "{{tailscale_up_args}} --reset --force-reauth"
   changed_when: true  # tell ansible that it changed the system
 
 - name: get tailscale ip

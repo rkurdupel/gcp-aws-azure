@@ -1,3 +1,16 @@
+# before connecting to any vm check if ssh_key_path is set
+- name: validate required env vars
+  hosts: localhost
+  connection: localhost
+  tasks:
+    - name: check SSH is set
+      assert:
+        that:
+          - lookup('env', 'SSH_KEY_PATH') != ''
+        fail_msg: |
+          SSH_KEY_PATH is not set.
+          Run: export SSH_KEY_PATH=~/.ssh/id_ed25519
+
 # install basic packages k3s need to run
 - name: common setup on all nodes
   hosts: cloud
